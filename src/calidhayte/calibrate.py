@@ -51,6 +51,21 @@ class Calibrate:
         coefficients : pd.DataFrame
             Coefficients to calibrate datasets off of
         """
+        empty_dataframe_test = list()
+        for name, df in {
+                "Train": train,
+                "Test": test,
+                "Coefficients": coefficients
+                }.items():
+            for shape_index in [0, 1]:
+                if df.shape[shape_index] == 0:
+                    empty_dataframe_test.append(f"{name} axis {shape_index}")
+
+        if empty_dataframe_test:
+            raise ValueError(
+                    f"The following axis are empty: {empty_dataframe_test}"
+                    )
+
         self.train = train
         self.test = test
         self.coefficients = coefficients

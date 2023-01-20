@@ -52,3 +52,15 @@ def test_skl_standard_cal(all_values_present_skl):
     for key, test in tests.items():
         print(f"{key}: {test}")
     assert all(tests.values())
+
+
+def test_calibrate_blanks_provided():
+    with pytest.raises(
+            ValueError,
+            match=r"The following axis are empty: \[.*\]"
+            ):
+        Calibrate(
+                train=pd.DataFrame(),
+                test=pd.DataFrame(),
+                coefficients=pd.DataFrame()
+                )
