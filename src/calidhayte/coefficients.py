@@ -1,9 +1,9 @@
-""" Contains classes and methods used to perform different methods of linear 
+""" Contains classes and methods used to perform different methods of linear
 regression
 
 This module is used to perform different methods of linear regression on a
 dataset (or a training subset), determine all coefficients and then calculate
-a range of errors (using the testing subset if available). 
+a range of errors (using the testing subset if available).
 
     Classes:
         Calibration: Calibrates one set of measurements against another
@@ -20,13 +20,13 @@ __status__ = "Indev"
 
 from collections import defaultdict
 import logging
+import re
+from typing import DefaultDict
 
 import arviz as az
 import bambi as bmb
 import numpy as np
 import pandas as pd
-import pymc as pm
-import re
 from sklearn import linear_model as lm
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split as ttsplit
@@ -35,8 +35,9 @@ logger = logging.getLogger("pymc")
 logger.setLevel(logging.ERROR)
 
 
-class Calibration:
-    """Calibrates one set of measurements against another
+class Coefficients:
+    """Calibrates one set of measurements against another and returns
+    coefficients
 
     Attributes:
         - x_train (DataFrame): Independent measurements to train calibration
@@ -114,8 +115,8 @@ class Calibration:
         - y_data (DataFrame): Dependent measurements. Keys include:
             TBA
         - split(bool): Split the dataset? Default: True
-        - test_size (float): Proportion of the data to use for testing. Use value
-        greater than 0 but less than 1. Defaults to 0.4
+        - test_size (float): Proportion of the data to use for testing. Use
+        value greater than 0 but less than 1. Defaults to 0.4
         - seed (int): Seed to use when deciding how to split variables,
         ensures consistency between runs. Defaults to 72.
         """
@@ -147,7 +148,9 @@ class Calibration:
             self.y_train = y_data_clean
             self.x_test = x_data_clean
             self.y_test = y_data_clean
-        self._coefficients = defaultdict(pd.DataFrame)
+        self._coefficients: DefaultDict[str, pd.DataFrame] = defaultdict(
+                pd.DataFrame
+                )
 
         self.valid_comparison = self.x_train.shape[0] > 0
 
@@ -247,7 +250,7 @@ class Calibration:
         results_dict = {"coeff.x": coeffs[0]}
         for index, coeff in enumerate(mv_keys):
             results_dict[f"coeff.{coeff}"] = coeffs[index + 1]
-        results_dict["i.Intercept"] = intercept
+        results_dict["i.intercept"] = intercept
         results = pd.DataFrame(results_dict, index=[" + ".join(vars_used)])
         self._coefficients[technique] = pd.concat(
             [self._coefficients[technique], results]
@@ -269,8 +272,8 @@ class Calibration:
         for combo_key, bambi_key in zip(combo_list, bambi_list):
             results_dict[f"coeff.{combo_key}"] = summary.loc[bambi_key, "mean"]
             results_dict[f"sd.{combo_key}"] = summary.loc[bambi_key, "sd"]
-        results_dict[f"i.Intercept"] = summary.loc["Intercept", "mean"]
-        results_dict[f"sd.Intercept"] = summary.loc["Intercept", "sd"]
+        results_dict["i.intercept"] = summary.loc["Intercept", "mean"]
+        results_dict["sd.intercept"] = summary.loc["Intercept", "sd"]
         results = pd.DataFrame(results_dict, index=[" + ".join(combo_list)])
         self._coefficients[technique] = pd.concat(
             [self._coefficients[technique], results]

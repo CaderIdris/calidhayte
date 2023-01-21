@@ -1,3 +1,4 @@
+import math
 import re
 import typing
 
@@ -63,8 +64,8 @@ class Calibrate:
 
         if empty_dataframe_test:
             raise ValueError(
-                    f"The following axis are empty: {empty_dataframe_test}"
-                    )
+                f"The following axis are empty: {empty_dataframe_test}"
+            )
 
         self.train = train
         self.test = test
@@ -104,7 +105,7 @@ class Calibrate:
             All coefficients to be calibrated with, the
             mean.coeff and sd.coeff correspond to the coefficient mean and
             associated standard deviation. Intercept mean and sd is given with
-            i.Intercept and sd.Intercept.
+            i.intercept and sd.intercept.
 
         Returns
         -------
@@ -117,21 +118,27 @@ class Calibrate:
             element
             for element in coefficient_keys_raw
             if element
-            not in ["coeff.x", "sd.x", "sd.Intercept", "i.Intercept", "index"]
+            not in ["coeff.x", "sd.x", "sd.intercept", "i.intercept", "index"]
         ]
         coefficient_keys = list()
         for key in coefficient_keys_raw:
             if re.match(r"coeff\.", key):
                 coefficient_keys.append(re.sub(r"coeff\.", "", key))
-        y_pred_train = self.train["x"] * coeffs.get("coeff.x")
-        y_pred_test = self.test["x"] * coeffs.get("coeff.x")
+        if not math.isnan(coeffs.get("coeff.x")):
+            y_pred_train = self.train.loc[:, "x"] * coeffs.get("coeff.x")
+            y_pred_test = self.test.loc[:, "x"] * coeffs.get("coeff.x")
+            init_error = 2 * coeffs.get("sd.x")
+        else:
+            y_pred_train = self.train.loc[:, "x"] * 0
+            y_pred_test = self.test.loc[:, "x"] * 0
+            init_error = 0
         y_pred = {
             "mean.Train": pd.Series(y_pred_train),
-            "min.Train": pd.Series(y_pred_train),
-            "max.Train": pd.Series(y_pred_train),
+            "min.Train": pd.Series(y_pred_train) - init_error,
+            "max.Train": pd.Series(y_pred_train) + init_error,
             "mean.Test": pd.Series(y_pred_test),
-            "min.Test": pd.Series(y_pred_test),
-            "max.Test": pd.Series(y_pred_test),
+            "min.Test": pd.Series(y_pred_test) - init_error,
+            "max.Test": pd.Series(y_pred_test) + init_error
         }
         for coeff in coefficient_keys:
             to_add_train = self.train[coeff] * coeffs.get(f"coeff.{coeff}")
@@ -152,8 +159,8 @@ class Calibrate:
                 (to_add_test - coeff_error_test)
             y_pred["max.Test"] = y_pred["max.Test"] + \
                 (to_add_test + coeff_error_test)
-        to_add_int = coeffs.get("i.Intercept")
-        int_error = 2 * coeffs.get("sd.Intercept")
+        to_add_int = coeffs.get("i.intercept")
+        int_error = 2 * coeffs.get("sd.intercept")
 
         y_pred["mean.Train"] = y_pred["mean.Train"] + to_add_int
         y_pred["min.Train"] = y_pred["min.Train"] + (to_add_int - int_error)
@@ -178,7 +185,7 @@ class Calibrate:
         coeffs : pd.Series
             All coefficients to be calibrated with, the coefficients are
             present with the coeff. prefix and the intercept is present under
-            the i.Intercept tag
+            the i.intercept tag
 
         Returns
         -------
@@ -190,22 +197,29 @@ class Calibrate:
         coefficient_keys_raw = [
             element
             for element in coefficient_keys_raw
-            if element not in ["coeff.x", "i.Intercept", "index"]
+            if element not in ["coeff.x", "i.intercept", "index"]
         ]
         coefficient_keys = list()
         for key in coefficient_keys_raw:
             if re.match(r"coeff\.", key):
                 coefficient_keys.append(re.sub(r"coeff\.", "", key))
-        y_pred = {
-            "Train": pd.Series(self.train["x"]) * coeffs.get("coeff.x"),
-            "Test": pd.Series(self.test["x"]) * coeffs.get("coeff.x"),
-        }
+        if not math.isnan(coeffs.get("coeff.x")):
+            y_pred = {
+                "Train": pd.Series(self.train["x"]) * coeffs.get("coeff.x"),
+                "Test": pd.Series(self.test["x"]) * coeffs.get("coeff.x"),
+            }
+        else:
+            y_pred = {
+                "Train": pd.Series(self.train["x"]) * 0,
+                "Test": pd.Series(self.test["x"]) * 0,
+            }
+
         for coeff in coefficient_keys:
             to_add_test = self.test[coeff] * coeffs.get(f"coeff.{coeff}")
             to_add_train = self.train[coeff] * coeffs.get(f"coeff.{coeff}")
             y_pred["Test"] = y_pred["Test"] + to_add_test
             y_pred["Train"] = y_pred["Train"] + to_add_train
-        to_add = coeffs.get("i.Intercept")
+        to_add = coeffs.get("i.intercept")
         y_pred["Test"] = y_pred["Test"] + to_add
         y_pred["Train"] = y_pred["Train"] + to_add
         return y_pred
