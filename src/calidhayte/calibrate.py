@@ -1,6 +1,6 @@
 import math
 import re
-import typing
+from typing import Dict
 
 import pandas as pd
 
@@ -70,7 +70,7 @@ class Calibrate:
         self.train = train
         self.test = test
         self.coefficients = coefficients
-        self.y_pred = dict()
+        self.y_pred: Dict[str, pd.DataFrame] = dict()
 
         column_names = self.coefficients.columns
         pymc_calibration = any(
@@ -79,18 +79,24 @@ class Calibrate:
                 )
         for coefficient_set in self.coefficients.iterrows():
             if pymc_calibration:
-                self.y_pred[coefficient_set[0]] = self._pymc_calibrate(
+                coeffs = self._pymc_calibrate(
                         coefficient_set[1]
                         )
             else:
-                self.y_pred[coefficient_set[0]] = self._skl_calibrate(
+                coeffs = self._skl_calibrate(
                         coefficient_set[1]
                         )
+            for key, measures in coeffs.items():
+                df = self.y_pred.get(key, None)
+                if df is None:
+                    self.y_pred[key] = pd.DataFrame()
+                    df = self.y_pred[key]
+                df[coefficient_set[0]] = measures
 
     def _pymc_calibrate(
             self,
             coeffs: pd.Series
-            ) -> typing.Dict[str, pd.DataFrame]:
+            ) -> Dict[str, pd.DataFrame]:
         """ Calibrates x measurements with provided pymc coefficients. Returns
         mean, max and min calibrations, where max and min are +-2*sd.
 
@@ -173,7 +179,7 @@ class Calibrate:
     def _skl_calibrate(
             self,
             coeffs: pd.Series
-            ) -> typing.Dict[str, pd.DataFrame]:
+            ) -> Dict[str, pd.DataFrame]:
         """ Calibrate x measurements with provided skl coefficients. Returns
         skl calibration.
 
@@ -224,5 +230,76 @@ class Calibrate:
         y_pred["Train"] = y_pred["Train"] + to_add
         return y_pred
 
-    def return_measurements(self) -> typing.Dict[str, pd.DataFrame]:
+    def join_measurements(self) -> Dict[str, pd.DataFrame]:
+        """ Joins test and train measurements into one dataframe and sorts them
+        by index to recreate the initial measurements
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        joined : dict[str, pd.DataFrame]
+            A dictionary containing at least two keys.
+            x - The precalibrated measurements, each column represents an
+            measurements variable used in the calibration
+            y - The calibrated measurements, each column represents a
+            variable combination used to calibrate the measurements
+            Optional columns:
+                y.min - Minimum calibrated value, if pymc used to calibrate
+                y.max - Maximum calibrated value, if pymc used to calibrate
+
+        """
+
+        joined = dict()
+        joined['x'] = pd.concat([self.test, self.train]).sort_index()
+
+        print(self.y_pred)
+
+        pymc_bool = any(
+                [
+                    re.search(r"mean\.", key)
+                    for key in self.y_pred.keys()
+                    ]
+                )
+
+        if pymc_bool:
+            joined['y'] = pd.concat(
+                    [self.y_pred["mean.Train"],
+                     self.y_pred["mean.Test"]]
+                    ).sort_index()
+            joined['y.min'] = pd.concat(
+                    [self.y_pred["min.Train"],
+                     self.y_pred["min.Test"]]
+                    ).sort_index()
+            joined['y.max'] = pd.concat(
+                    [self.y_pred["max.Train"],
+                     self.y_pred["max.Test"]]
+                    ).sort_index()
+        else:
+            joined['y'] = pd.concat(
+                    [self.y_pred["Train"],
+                     self.y_pred["Test"]]
+                    ).sort_index()
+
+        return joined
+
+    def return_measurements(self) -> Dict[str, pd.DataFrame]:
+        """ Returns the calibrated measurements
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        y_pred : dict[str, pd.DataFrame]
+            All calibrated measurements, split into Train and Test data. If
+            pymc was used to calibrate the data, Test and Train are also subset
+            by "mean.", "min." and "max. prefixes respectively, representing
+            the average, minimum and maximum signal calibrated with min and max
+            calculated as 2 * std plus/minus the average calibration
+            coefficient
+        """
         return self.y_pred

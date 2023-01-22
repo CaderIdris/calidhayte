@@ -65,17 +65,25 @@ x+a,1,1,1,1,3,1"""
 
 
 def test_skl_standard_cal(all_values_present_skl):
+    """
+    Tests that signals with associated scikitlearn coefficients are calibrated
+    properly
+    """
     tests = dict()
     cal = Calibrate(**all_values_present_skl)
 
     expected_test = all_values_present_skl['test'].loc[:, "y"]
     expected_train = all_values_present_skl['train'].loc[:, "y"]
 
-    for key, pred in cal.return_measurements().items():
-        tests[f"{key} train"] = expected_train.equals(pred['Train']
+    measures = cal.return_measurements()
+    for col in measures["Train"].columns:
+        tests[f"{col} train"] = expected_train.equals(measures["Train"]
+                                                      .loc[:, col]
                                                       .astype(int)
                                                       )
-        tests[f"{key} test"] = expected_test.equals(pred['Test']
+    for col in measures["Test"].columns:
+        tests[f"{col} test"] = expected_test.equals(measures["Test"]
+                                                    .loc[:, col]
                                                     .astype(int)
                                                     )
     for key, test in tests.items():
@@ -84,6 +92,10 @@ def test_skl_standard_cal(all_values_present_skl):
 
 
 def test_pymc_standard_cal(all_values_present_pymc):
+    """
+    Tests that signals with associated pymc coefficients are calibrated
+    properly
+    """
     tests = dict()
     cal = Calibrate(**all_values_present_pymc)
 
@@ -92,25 +104,24 @@ def test_pymc_standard_cal(all_values_present_pymc):
 
     keys = ["x", "a", "x+a"]
     vals = cal.return_measurements()
-
     for key in keys:
-        tests[f"{key} train"] = expected_train.equals(vals[key]['mean.Train']
+        tests[f"{key} train"] = expected_train.equals(vals['mean.Train'][key]
                                                       .astype(int)
                                                       )
-        tests[f"{key} min train"] = expected_train.gt(vals[key]['min.Train']
+        tests[f"{key} min train"] = expected_train.gt(vals['min.Train'][key]
                                                       .astype(float)
                                                       ).all()
-        tests[f"{key} max train"] = expected_train.lt(vals[key]['max.Train']
+        tests[f"{key} max train"] = expected_train.lt(vals['max.Train'][key]
                                                       .astype(float)
                                                       ).all()
 
-        tests[f"{key} test"] = expected_test.equals(vals[key]['mean.Test']
+        tests[f"{key} test"] = expected_test.equals(vals['mean.Test'][key]
                                                     .astype(int)
                                                     )
-        tests[f"{key} min test"] = expected_test.gt(vals[key]['min.Test']
+        tests[f"{key} min test"] = expected_test.gt(vals['min.Test'][key]
                                                     .astype(float)
                                                     ).all()
-        tests[f"{key} max test"] = expected_test.lt(vals[key]['max.Test']
+        tests[f"{key} max test"] = expected_test.lt(vals['max.Test'][key]
                                                     .astype(float)
                                                     ).all()
     for key, test in tests.items():
@@ -119,6 +130,9 @@ def test_pymc_standard_cal(all_values_present_pymc):
 
 
 def test_calibrate_blanks_provided():
+    """
+    Tests that the proper error is raised when passing in blank dataframes
+    """
     with pytest.raises(
             ValueError,
             match=r"The following axis are empty: \[.*\]"
@@ -131,33 +145,44 @@ def test_calibrate_blanks_provided():
 
 
 @pytest.mark.parametrize(
-        "measures,ex_or,ex_pr",
+        "data_type,ex_or,ex_pr",
         [
             (
-                all_values_present_skl,
-                pd.Series(1, 2, 3, 8, 0),
-                pd.Series(3, 5, 9, 17, 1)
+                "skl",
+                pd.Series([1, 2, 4, 8, 0]),
+                pd.Series([3, 5, 9, 17, 1])
             ),
             (
-                all_values_present_pymc,
-                pd.Series(1, 2, 4, 0.5, 0),
-                pd.Series(5, 7, 11, 4, 3)
+                "pymc",
+                pd.Series([1, 2, 4, 0.5, 0]),
+                pd.Series([5, 7, 11, 4, 3])
             )
          ]
     )
-def test_join_measurements(all_values_present_skl):
+def test_join_measurements(
+        data_type,
+        ex_or,
+        ex_pr,
+        all_values_present_skl,
+        all_values_present_pymc
+        ):
+    """
+    Tests that measurements are joined properly
+    """
     tests = list()
-    cal = Calibrate(**all_values_present_skl)
+    if data_type == "skl":
+        measures = all_values_present_skl
+    else:
+        measures = all_values_present_pymc
+    cal = Calibrate(**measures)
 
     joined_measures = cal.join_measurements()
-    expected_original = pd.Series([1, 2, 4, 8, 0])
-    expected_pred = pd.Series([3, 5, 9, 17, 1])
 
-    orig_test = expected_original.eq(joined_measures.get("x").loc[:, "x"])
-    tests.append(orig_test)
+    orig_test = ex_or.eq(joined_measures["x"].loc[:, "x"])
+    tests.append(orig_test.all())
     print(f"x values joined correctly: {orig_test}")
-    pred_test = expected_pred.eq(joined_measures.get("y").loc[:, "x"])
-    tests.append(pred_test)
+    pred_test = ex_pr.eq(joined_measures["y"].loc[:, "x"])
+    tests.append(pred_test.all())
     print(f"y values joined correctly: {pred_test}")
 
     assert all(tests)
