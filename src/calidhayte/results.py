@@ -1,15 +1,13 @@
-from collections import defaultdict
-import re
-from typing import Optional
+from typing import Optional, Union
 
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import pandas as pd
 from sklearn import metrics as met
 
-mpl.use("pgf")  # Used to make pgf files for latex
 from .calibrate import Calibrate
 
+mpl.use("pgf")  # Used to make pgf files for latex
 plt.rcParams.update({"figure.max_open_warning": 0})
 
 
@@ -17,78 +15,69 @@ class Results:
     """Calculates errors between "true" and "predicted" measurements, plots
     graphs and returns all results
 
-    Attributes:
-        train (DataFrame): Training data
+    ```
 
-        test (DataFrame): Testing data
-
-        coefficients (DataFrame): Calibration coefficients
-
-        _errors (dict): Dictionary of dataframes, each key representing a
+    Attributes
+    ----------
+    train : pd.DataFrame
+        Training data
+    test : pd.DataFrame
+        Testing data
+    coefficients : pd.DataFrame
+        Calibration coefficients
+    _errors : dict[str, pd.DataFrame]
+        Dictionary of dataframes, each key representing a
         different calibration method
+    _cal : Calibrate
+        Calibrate object that contains train and test calibrated by
+        coefficients
+    y_pred : dict
+        Calibrated x measurements
+    x_name : str
+        Name of x device
+    y_name : str
+        Name of y device
 
-        y_pred (dict): Calibrated x measurements
-
-        combos (list): List of all possible variable and dataset combos
-
-        x_name (str): Name of x device
-
-        y_name (str): Name of y device
-
-    Methods:
-        _calibrate: Calibrate all x measurements with provided coefficients.
-        This function splits calibrations depending on whether the coefficients
-        were derived using skl or pymc
-
-        _pymc_calibrate: Calibrates x measurements with provided pymc
-        coefficients. Returns mean, max and min calibrations.
-
-        _skl_calibrate: Calibrates x measurements with provided skl
-        coefficients.
-
-        _get_all_combos: Return all possible combinations of datasets (e.g
-        calibrated test, uncalibrated train) for every method
-
-        _all_combos: Return all possible combinations of datasets (e.g
-        calibrated test, uncalibrated train) for single method
-
-        explained_variance_score: Calculate the explained variance score
+    Methods
+    -------
+    explained_variance_score()
+        Calculate the explained variance score
         between the true (y) measurements and all predicted (x) measurements
-
-        max: Calculate the max error between the true (y) measurements and all
+    max()
+        Calculate the max error between the true (y) measurements and all
         predicted (x) measurements
-
-        mean_absolute: Calculate the mean absolute error between the true (y)
+    mean_absolute()
+        Calculate the mean absolute error between the true (y)
         measurements and all predicted (x) measurements
-
-        root_mean_squared: Calculate the root mean squared error between the
+    root_mean_squared()
+        Calculate the root mean squared error between the
         true (y) measurements and all predicted (x) measurements
-
-        root_mean_squared_log: Calculate the root_mean_squared_log error
+    root_mean_squared_log()
+        Calculate the root_mean_squared_log error
         between the true (y) measurements and all predicted (x) measurements
-
-        median_absolute: Calculate the median absolute error between the true
+    median_absolute()
+        Calculate the median absolute error between the true
         (y) measurements and all predicted (x) measurements
-
-        mean_absolute_percentage: Calculate the mean absolute percentage error
+    mean_absolute_percentage()
+        Calculate the mean absolute percentage error
         between the true (y) measurements and all predicted (x) measurements
-
-        r2: Calculate the r2 score between the true (y) measurements and all
+    r2()
+        Calculate the r2 score between the true (y) measurements and all
         predicted (x) measurements
-
-        mean_poisson_deviance: Calculate the mean poisson deviance between the
+    mean_poisson_deviance()
+        Calculate the mean poisson deviance between the
         true (y) measurements and all predicted (x) measurements
-
-        mean_gamma_deviance: Calculate the mean gamma deviance between the true
+    mean_gamma_deviance()
+        Calculate the mean gamma deviance between the true
         (y) measurements and all predicted (x) measurements
-
-        mean_tweedie_deviance: Calculate the mean tweedie deviance between the
+    mean_tweedie_deviance()
+        Calculate the mean tweedie deviance between the
         true (y) measurements and all predicted (x) measurements
-
-        mean_pinball_loss: Calculate the mean pinball loss between the true
+    mean_pinball_loss()
+        Calculate the mean pinball loss between the true
         (y) measurements and all predicted (x) measurements
-
-        return_errors: Returns dictionary of all recorded errors
+    return_errors()
+        Returns dictionary of all recorded errors
     """
 
     def __init__(
@@ -96,19 +85,34 @@ class Results:
         train: pd.DataFrame,
         test: pd.DataFrame,
         coefficients: pd.DataFrame,
+        test_sets: Union[dict[str, bool], list[str]] = {
+            "Calibrated Train": False,
+            "Calibrated Test": True,
+            "Calibrated Full": False,
+            "Uncalibrated Train": False,
+            "Uncalibrated Test": True,
+            "Uncalibrated Full": False,
+            "PyMC Errors": False
+            },
         x_name: Optional[str] = None,
         y_name: Optional[str] = None
     ):
         """Initialise the class
 
-        Keyword Arguments:
-            train (DataFrame): Training data
-
-            test (DataFrame): Testing data
-
-            coefficients (DataFrame): Calibration coefficients
-
-            comparison_name (String): Name of the comparison
+        Parameters
+        ----------
+        train : pd.DataFrame
+            Training data
+        test : pd.DataFrame
+            Testing data
+        coefficients : pd.DataFrame
+            Calibration coefficients
+        x_name : str, optional
+            Name of device that was calibrated
+            (Default is None)
+        y_name : str, optional
+            Name of ground truth device
+            (Default is None)
         """
         self.train = train
         self.test = test
@@ -119,9 +123,45 @@ class Results:
                 self.test,
                 self.coefficients
                 )
+        self._datasets = self._prepare_datasets(test_sets)
         self.y_pred = self._cal.return_measurements()
         self.x_name = x_name
         self.y_name = y_name
+
+    def _prepare_datasets(self, test_sets: Union[dict[str, bool], list[str]]):
+        """
+        Prepare the datasets to be analysed
+
+        Parameters
+        ----------
+        test_sets : dict[str, bool], list[str]
+            Dictionary containing bools denoting which datasets to use
+            List containing datasets to use
+            Datasets are as follows:
+                - Calibrated Train
+                    Predicted y measurements from training set using
+                    coefficients
+                - Calibrated Test
+                    Predicted y measurements from testing set using
+                    coefficients
+                - Calibrated Full
+                    Predicted y measurements from both sets using
+                    coefficients
+                - Uncalibrated Train
+                    Base x measurements from training set
+                - Uncalibrated Test
+                    Base x measurements from testing set
+                - Uncalibrated Full
+                    Base x measurements from testing set
+                - PyMC Errors
+                    Include Min and Max calibrated measurements if PyMC used
+                    to get coefficients
+
+        Returns
+        -------
+        dict[str, dict[str, df]] containing all subsets of the data to be
+        analysed
+        """
 
     def explained_variance_score(self):
         """Calculate the explained variance score between the true values (y)
