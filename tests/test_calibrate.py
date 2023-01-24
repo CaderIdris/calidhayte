@@ -14,10 +14,10 @@ def all_values_present_skl():
     coeffs = """Coefficients,coeff.x,coeff.a,coeff.b,i.intercept
 x,2,,,1
 a,,2,,1
-x+a,1,1,,1
+x + a,1,1,,1
 b,,,4,1
-x+b,0.5,,3,1
-x+a+b,0.25,0.25,3,1"""
+x + b,0.5,,3,1
+x + a + b,0.25,0.25,3,1"""
     test = """index,y,x,a,b
 0,3,1,1,0.5
 1,5,2,2,1
@@ -44,7 +44,7 @@ def all_values_present_pymc():
     coeffs = """Coefficients,coeff.x,sd.x,coeff.a,sd.a,i.intercept,sd.intercept
 x,2,1,,,3,1
 a,,,2,1,3,1
-x+a,1,1,1,1,3,1"""
+x + a,1,1,1,1,3,1"""
 
     test = """index,y,x,a
 0,5,1,1
@@ -76,6 +76,7 @@ def test_skl_standard_cal(all_values_present_skl):
     expected_train = all_values_present_skl['train'].loc[:, "y"]
 
     measures = cal.return_measurements()
+    print(measures['Train'])
     for col in measures["Train"].columns:
         tests[f"{col} train"] = expected_train.equals(measures["Train"]
                                                       .loc[:, col]
@@ -102,26 +103,26 @@ def test_pymc_standard_cal(all_values_present_pymc):
     expected_test = all_values_present_pymc['test'].loc[:, "y"]
     expected_train = all_values_present_pymc['train'].loc[:, "y"]
 
-    keys = ["x", "a", "x+a"]
+    keys = ["x", "a", "x + a"]
     vals = cal.return_measurements()
     for key in keys:
-        tests[f"{key} train"] = expected_train.equals(vals['mean.Train'][key]
+        tests[f"{key} train"] = expected_train.equals(vals['Mean.Train'][key]
                                                       .astype(int)
                                                       )
-        tests[f"{key} min train"] = expected_train.gt(vals['min.Train'][key]
+        tests[f"{key} min train"] = expected_train.gt(vals['Minimum.Train'][key]
                                                       .astype(float)
                                                       ).all()
-        tests[f"{key} max train"] = expected_train.lt(vals['max.Train'][key]
+        tests[f"{key} max train"] = expected_train.lt(vals['Maximum.Train'][key]
                                                       .astype(float)
                                                       ).all()
 
-        tests[f"{key} test"] = expected_test.equals(vals['mean.Test'][key]
+        tests[f"{key} test"] = expected_test.equals(vals['Mean.Test'][key]
                                                     .astype(int)
                                                     )
-        tests[f"{key} min test"] = expected_test.gt(vals['min.Test'][key]
+        tests[f"{key} min test"] = expected_test.gt(vals['Minimum.Test'][key]
                                                     .astype(float)
                                                     ).all()
-        tests[f"{key} max test"] = expected_test.lt(vals['max.Test'][key]
+        tests[f"{key} max test"] = expected_test.lt(vals['Maximum.Test'][key]
                                                     .astype(float)
                                                     ).all()
     for key, test in tests.items():
@@ -178,10 +179,13 @@ def test_join_measurements(
 
     joined_measures = cal.join_measurements()
 
-    orig_test = ex_or.eq(joined_measures["x"].loc[:, "x"])
+    orig_test = ex_or.eq(joined_measures["Uncalibrated"].loc[:, "x"])
     tests.append(orig_test.all())
     print(f"x values joined correctly: {orig_test}")
-    pred_test = ex_pr.eq(joined_measures["y"].loc[:, "x"])
+    if data_type == "skl":
+        pred_test = ex_pr.eq(joined_measures["Calibrated"].loc[:, "x"])
+    else:
+        pred_test = ex_pr.eq(joined_measures["Mean.Calibrated"].loc[:, "x"])
     tests.append(pred_test.all())
     print(f"y values joined correctly: {pred_test}")
 

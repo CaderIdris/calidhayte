@@ -1,4 +1,4 @@
-from typing import Optional, Union
+from typing import Literal, Optional, Union
 
 import matplotlib as mpl
 import matplotlib.pyplot as plt
@@ -85,15 +85,21 @@ class Results:
         train: pd.DataFrame,
         test: pd.DataFrame,
         coefficients: pd.DataFrame,
-        test_sets: Union[dict[str, bool], list[str]] = {
-            "Calibrated Train": False,
-            "Calibrated Test": True,
-            "Calibrated Full": False,
-            "Uncalibrated Train": False,
-            "Uncalibrated Test": True,
-            "Uncalibrated Full": False,
-            "PyMC Errors": False
-            },
+        test_sets: list[
+            Literal[
+                "Calibrated Train",
+                "Calibrated Test",
+                "Calibrated Full",
+                "Uncalibrated Train",
+                "Uncalibrated Test",
+                "Uncalibrated Full",
+                "Bayesian Minimum",
+                "Bayesian Maximum"
+                ]
+            ] = [
+            "Calibrated Test",
+            "Uncalibrated Test"
+            ],
         x_name: Optional[str] = None,
         y_name: Optional[str] = None
     ):
@@ -123,19 +129,21 @@ class Results:
                 self.test,
                 self.coefficients
                 )
-        self._datasets = self._prepare_datasets(test_sets)
         self.y_pred = self._cal.return_measurements()
+        self._datasets = self._prepare_datasets(test_sets)
         self.x_name = x_name
         self.y_name = y_name
 
-    def _prepare_datasets(self, test_sets: Union[dict[str, bool], list[str]]):
+    def _prepare_datasets(
+            self,
+            test_sets: list[str]
+            ) -> dict[str, dict[str, pd.DataFrame]]:
         """
         Prepare the datasets to be analysed
 
         Parameters
         ----------
-        test_sets : dict[str, bool], list[str]
-            Dictionary containing bools denoting which datasets to use
+        test_sets : list[str]
             List containing datasets to use
             Datasets are as follows:
                 - Calibrated Train
@@ -153,15 +161,64 @@ class Results:
                     Base x measurements from testing set
                 - Uncalibrated Full
                     Base x measurements from testing set
-                - PyMC Errors
-                    Include Min and Max calibrated measurements if PyMC used
-                    to get coefficients
-
+                - Bayesian Minimum
+                    Mean bayesian coefficients - 2 times standard deviation
+                - Bayesian Maximum
+                    Mean bayesian coefficients + 2 times standard deviation
         Returns
         -------
-        dict[str, dict[str, df]] containing all subsets of the data to be
-        analysed
+        datasets: dict[str, dict[str, pd.DataFrame]]
+            Contains all subsets of the data to be analysed
         """
+        uncalibrated_datasets = {
+                "Uncalibrated Train": {
+                    "x": self.train.loc[:, ['x']],
+                    "y": self.train.loc[:, ['y']]
+                    },
+                "Uncalibrated Test": {
+                    "x": self.test.loc[:, ['x']],
+                    "y": self.test.loc[:, ['y']]
+                    },
+                "Uncalibrated Full": {
+                    "x": pd.concat(
+                        [self.train.loc[:, ['x']], self.test.loc[:, ['x']]]
+                        ),
+                    "y": pd.concat(
+                        [self.train.loc[:, ['y']], self.test.loc[:, ['y']]]
+                        )
+                    }
+                }
+        pymc_bool = all(
+                [
+                    any(["mean." in key for key in self.y_pred.keys()]),
+                    any(["min." in key for key in self.y_pred.keys()]),
+                    any(["max." in key for key in self.y_pred.keys()])
+                    ]
+                )
+        if pymc_bool:
+            pass
+        else:
+            skl_datasets = uncalibrated_datasets | {
+                    "Calibrated Train": {
+                        "x": self.y_pred['Train'],
+                        "y": self.train.loc[:, ['y']]
+                        },
+                    "Calibrated Test": {
+                        "x": self.y_pred['Test'],
+                        "y": self.test.loc[:, ['y']]
+                        },
+                    "Calibrated Full": {
+                        "x": pd.concat(
+                            [self.y_pred['Train'], self.y_pred['Test']]
+                            ),
+                        "y": pd.concat(
+                            [self.train.loc[:, ['y']], self.test.loc[:, ['y']]]
+                            )
+                        }
+                    }
+
+
+        return datasets
 
     def explained_variance_score(self):
         """Calculate the explained variance score between the true values (y)

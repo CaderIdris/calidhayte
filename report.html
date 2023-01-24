@@ -439,7 +439,7 @@ function filterTable(elem) { // eslint-disable-line no-unused-vars
 }
 </script>
     <h1>report.html</h1>
-    <p>Report generated on 24-Jan-2023 at 15:57:03 by <a href="https://pypi.python.org/pypi/pytest-html">pytest-html</a> v3.2.0</p>
+    <p>Report generated on 24-Jan-2023 at 21:33:22 by <a href="https://pypi.python.org/pypi/pytest-html">pytest-html</a> v3.2.0</p>
     <h2>Environment</h2>
     <table id="environment">
       <tr>
@@ -455,7 +455,7 @@ function filterTable(elem) { // eslint-disable-line no-unused-vars
         <td>Python</td>
         <td>3.10.9</td></tr></table>
     <h2>Summary</h2>
-    <p>350 tests ran in 416.37 seconds. </p>
+    <p>350 tests ran in 434.88 seconds. </p>
     <p class="filter" hidden="true">(Un)check the boxes to filter the results.</p><input checked="true" class="filter" data-test-result="passed" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="passed">350 passed</span>, <input checked="true" class="filter" data-test-result="skipped" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="skipped">0 skipped</span>, <input checked="true" class="filter" data-test-result="failed" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="failed">0 failed</span>, <input checked="true" class="filter" data-test-result="error" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="error">0 errors</span>, <input checked="true" class="filter" data-test-result="xfailed" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="xfailed">0 expected failures</span>, <input checked="true" class="filter" data-test-result="xpassed" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="xpassed">0 unexpected passes</span>
     <h2>Results</h2>
     <table id="results-table">
@@ -475,24 +475,28 @@ function filterTable(elem) { // eslint-disable-line no-unused-vars
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
-            <div class="log"> ------------------------------Captured stdout call------------------------------ <br/>x train: True
+            <div class="log"> ------------------------------Captured stdout call------------------------------ <br/>         x    a  x + a    b  x + b  x + a + b
+index                                        
+2      9.0  9.0    9.0  9.0    9.0        9.0
+4      1.0  1.0    1.0  1.0    1.0        1.0
+x train: True
 a train: True
-x+a train: True
+x + a train: True
 b train: True
-x+b train: True
-x+a+b train: True
+x + b train: True
+x + a + b train: True
 x test: True
 a test: True
-x+a test: True
+x + a test: True
 b test: True
-x+b test: True
-x+a+b test: True
+x + b test: True
+x + a + b test: True
 <br/></div></td></tr></tbody>
       <tbody class="passed results-table-row">
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_calibrate.py::test_pymc_standard_cal</td>
-          <td class="col-duration">0.03</td>
+          <td class="col-duration">0.04</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -508,12 +512,12 @@ a max train: True
 a test: True
 a min test: True
 a max test: True
-x+a train: True
-x+a min train: True
-x+a max train: True
-x+a test: True
-x+a min test: True
-x+a max test: True
+x + a train: True
+x + a min train: True
+x + a max train: True
+x + a test: True
+x + a min test: True
+x + a max test: True
 <br/></div></td></tr></tbody>
       <tbody class="passed results-table-row">
         <tr>
@@ -532,14 +536,14 @@ x+a max test: True
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
-            <div class="log"> ------------------------------Captured stdout call------------------------------ <br/>{&#x27;Train&#x27;:          x    a  x+a    b  x+b  x+a+b
-index                                
-2      9.0  9.0  9.0  9.0  9.0    9.0
-4      1.0  1.0  1.0  1.0  1.0    1.0, &#x27;Test&#x27;:           x     a   x+a     b   x+b  x+a+b
-index                                     
-0       3.0   3.0   3.0   3.0   3.0    3.0
-1       5.0   5.0   5.0   5.0   5.0    5.0
-3      17.0  17.0  17.0  17.0  17.0   17.0}
+            <div class="log"> ------------------------------Captured stdout call------------------------------ <br/>{&#x27;Test&#x27;:           x     a  x + a     b  x + b  x + a + b
+index                                           
+0       3.0   3.0    3.0   3.0    3.0        3.0
+1       5.0   5.0    5.0   5.0    5.0        5.0
+3      17.0  17.0   17.0  17.0   17.0       17.0, &#x27;Train&#x27;:          x    a  x + a    b  x + b  x + a + b
+index                                        
+2      9.0  9.0    9.0  9.0    9.0        9.0
+4      1.0  1.0    1.0  1.0    1.0        1.0}
 x values joined correctly: 0    True
 1    True
 2    True
@@ -557,32 +561,32 @@ dtype: bool
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_calibrate.py::test_join_measurements[pymc-ex_or1-ex_pr1]</td>
-          <td class="col-duration">0.06</td>
+          <td class="col-duration">0.09</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
-            <div class="log"> ------------------------------Captured stdout call------------------------------ <br/>{&#x27;mean.Train&#x27;:           x     a   x+a
-index                  
-2      11.0  11.0  11.0
-4       3.0   3.0   3.0, &#x27;min.Train&#x27;:          x    a  x+a
-index               
-2      7.0  1.0 -1.0
-4     -1.0  1.0 -1.0, &#x27;max.Train&#x27;:           x     a   x+a
-index                  
-2      15.0  21.0  23.0
-4       7.0   5.0   7.0, &#x27;mean.Test&#x27;:          x    a  x+a
-index               
-0      5.0  5.0  5.0
-1      7.0  7.0  7.0
-3      4.0  4.0  4.0, &#x27;min.Test&#x27;:          x    a  x+a
-index               
-0      1.0  1.0 -1.0
-1      3.0  1.0 -1.0
-3      0.0  1.0 -1.0, &#x27;max.Test&#x27;:           x     a   x+a
-index                  
-0       9.0   9.0  11.0
-1      11.0  13.0  15.0
-3       8.0   7.0   9.0}
+            <div class="log"> ------------------------------Captured stdout call------------------------------ <br/>{&#x27;Mean.Test&#x27;:          x    a  x + a
+index                 
+0      5.0  5.0    5.0
+1      7.0  7.0    7.0
+3      4.0  4.0    4.0, &#x27;Minimum.Test&#x27;:          x    a  x + a
+index                 
+0     -5.0 -5.0   -5.0
+1     -3.0 -3.0   -3.0
+3     -6.0 -6.0   -6.0, &#x27;Maximum.Test&#x27;:           x     a  x + a
+index                   
+0      15.0  15.0   15.0
+1      17.0  17.0   17.0
+3      14.0  14.0   14.0, &#x27;Mean.Train&#x27;:           x     a  x + a
+index                   
+2      11.0  11.0   11.0
+4       3.0   3.0    3.0, &#x27;Minimum.Train&#x27;:          x    a  x + a
+index                 
+2      1.0  1.0    1.0
+4     -7.0 -7.0   -7.0, &#x27;Maximum.Train&#x27;:           x     a  x + a
+index                   
+2      21.0  21.0   21.0
+4      13.0  13.0   13.0}
 x values joined correctly: 0    True
 1    True
 2    True
@@ -674,7 +678,7 @@ x scaled mean roughly 0.5: True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_skl_single_cals_ex_omp[mv_keys0-ols]</td>
-          <td class="col-duration">0.02</td>
+          <td class="col-duration">0.01</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -740,7 +744,7 @@ Correct number of columns (LASSO LARS): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_skl_single_cals_ex_omp[mv_keys0-ransac]</td>
-          <td class="col-duration">0.03</td>
+          <td class="col-duration">0.02</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -751,7 +755,7 @@ Correct number of columns (RANSAC): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_skl_single_cals_ex_omp[mv_keys0-theil_sen]</td>
-          <td class="col-duration">0.28</td>
+          <td class="col-duration">0.27</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -839,7 +843,7 @@ Correct number of columns (RANSAC): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_skl_single_cals_ex_omp[mv_keys1-theil_sen]</td>
-          <td class="col-duration">0.29</td>
+          <td class="col-duration">0.28</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -993,7 +997,7 @@ Correct number of columns (LARS): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_skl_single_cals_ex_omp[mv_keys3-lasso_lars]</td>
-          <td class="col-duration">0.01</td>
+          <td class="col-duration">0.02</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -1015,7 +1019,7 @@ Correct number of columns (RANSAC): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_skl_single_cals_ex_omp[mv_keys3-theil_sen]</td>
-          <td class="col-duration">0.29</td>
+          <td class="col-duration">0.28</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -1081,7 +1085,7 @@ Correct number of columns (LARS): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_skl_single_cals_ex_omp[mv_keys4-lasso_lars]</td>
-          <td class="col-duration">0.01</td>
+          <td class="col-duration">0.02</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -1103,7 +1107,7 @@ Correct number of columns (RANSAC): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_skl_single_cals_ex_omp[mv_keys4-theil_sen]</td>
-          <td class="col-duration">0.32</td>
+          <td class="col-duration">0.30</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -1169,7 +1173,7 @@ Correct number of columns (LARS): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_skl_single_cals_ex_omp[mv_keys5-lasso_lars]</td>
-          <td class="col-duration">0.01</td>
+          <td class="col-duration">0.02</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -1191,7 +1195,7 @@ Correct number of columns (RANSAC): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_skl_single_cals_ex_omp[mv_keys5-theil_sen]</td>
-          <td class="col-duration">0.31</td>
+          <td class="col-duration">0.30</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -1257,7 +1261,7 @@ Correct number of columns (LARS): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_skl_single_cals_ex_omp[mv_keys6-lasso_lars]</td>
-          <td class="col-duration">0.01</td>
+          <td class="col-duration">0.02</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -1268,7 +1272,7 @@ Correct number of columns (LASSO LARS): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_skl_single_cals_ex_omp[mv_keys6-ransac]</td>
-          <td class="col-duration">0.05</td>
+          <td class="col-duration">0.06</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -1279,7 +1283,7 @@ Correct number of columns (RANSAC): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_skl_single_cals_ex_omp[mv_keys6-theil_sen]</td>
-          <td class="col-duration">0.31</td>
+          <td class="col-duration">0.30</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -1433,7 +1437,7 @@ Correct number of columns (LARS): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_skl_single_cals_ex_omp[mv_keys8-lasso_lars]</td>
-          <td class="col-duration">0.08</td>
+          <td class="col-duration">0.09</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -1455,7 +1459,7 @@ Correct number of columns (RANSAC): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_skl_single_cals_ex_omp[mv_keys8-theil_sen]</td>
-          <td class="col-duration">2.37</td>
+          <td class="col-duration">2.29</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -1499,7 +1503,7 @@ Correct number of columns (Orthogonal Matching Pursuit): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_skl_omp[mv_keys3]</td>
-          <td class="col-duration">0.06</td>
+          <td class="col-duration">0.01</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -1554,7 +1558,7 @@ Correct number of columns (Orthogonal Matching Pursuit): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[None-None-None-None-None-None-None-None-mv_keys0]</td>
-          <td class="col-duration">0.00</td>
+          <td class="col-duration">0.01</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -1564,7 +1568,7 @@ Correct number of columns (Orthogonal Matching Pursuit): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[None-None-None-None-None-None-None-ols-mv_keys0]</td>
-          <td class="col-duration">0.02</td>
+          <td class="col-duration">0.08</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -1628,7 +1632,7 @@ Correct number of columns (LASSO): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[None-None-None-None-None-lasso-ridge-None-mv_keys0]</td>
-          <td class="col-duration">0.08</td>
+          <td class="col-duration">0.09</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -1684,7 +1688,7 @@ Correct number of columns (Elastic Net): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[None-None-None-None-elastic_net-None-ridge-None-mv_keys0]</td>
-          <td class="col-duration">0.08</td>
+          <td class="col-duration">0.09</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -1698,7 +1702,7 @@ Correct number of columns (Elastic Net): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[None-None-None-None-elastic_net-None-ridge-ols-mv_keys0]</td>
-          <td class="col-duration">0.10</td>
+          <td class="col-duration">0.11</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -1864,7 +1868,7 @@ Correct number of columns (LARS): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[None-None-None-lars-None-lasso-ridge-None-mv_keys0]</td>
-          <td class="col-duration">0.11</td>
+          <td class="col-duration">0.10</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -1928,7 +1932,7 @@ Correct number of columns (LARS): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[None-None-None-lars-elastic_net-None-ridge-None-mv_keys0]</td>
-          <td class="col-duration">0.11</td>
+          <td class="col-duration">0.10</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -2046,7 +2050,7 @@ Correct number of columns (LASSO LARS): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[None-None-lasso_lars-None-None-None-None-ols-mv_keys0]</td>
-          <td class="col-duration">0.05</td>
+          <td class="col-duration">0.06</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -2060,7 +2064,7 @@ Correct number of columns (LASSO LARS): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[None-None-lasso_lars-None-None-None-ridge-None-mv_keys0]</td>
-          <td class="col-duration">0.06</td>
+          <td class="col-duration">0.07</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -2234,7 +2238,7 @@ Correct number of columns (LASSO LARS): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[None-None-lasso_lars-None-elastic_net-lasso-None-ols-mv_keys0]</td>
-          <td class="col-duration">0.16</td>
+          <td class="col-duration">0.17</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -2320,7 +2324,7 @@ Correct number of columns (LASSO LARS): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[None-None-lasso_lars-lars-None-None-ridge-None-mv_keys0]</td>
-          <td class="col-duration">0.08</td>
+          <td class="col-duration">0.09</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -2336,7 +2340,7 @@ Correct number of columns (LASSO LARS): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[None-None-lasso_lars-lars-None-None-ridge-ols-mv_keys0]</td>
-          <td class="col-duration">0.10</td>
+          <td class="col-duration">0.11</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -2426,7 +2430,7 @@ Correct number of columns (LASSO LARS): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[None-None-lasso_lars-lars-elastic_net-None-None-None-mv_keys0]</td>
-          <td class="col-duration">0.12</td>
+          <td class="col-duration">0.11</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -2498,7 +2502,7 @@ Correct number of columns (LASSO LARS): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[None-None-lasso_lars-lars-elastic_net-lasso-None-None-mv_keys0]</td>
-          <td class="col-duration">0.17</td>
+          <td class="col-duration">0.16</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -2516,7 +2520,7 @@ Correct number of columns (LASSO LARS): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[None-None-lasso_lars-lars-elastic_net-lasso-None-ols-mv_keys0]</td>
-          <td class="col-duration">0.19</td>
+          <td class="col-duration">0.18</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -2536,7 +2540,7 @@ Correct number of columns (LASSO LARS): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[None-None-lasso_lars-lars-elastic_net-lasso-ridge-None-mv_keys0]</td>
-          <td class="col-duration">0.20</td>
+          <td class="col-duration">0.19</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -2604,7 +2608,7 @@ Correct number of columns (RANSAC): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[None-ransac-None-None-None-None-ridge-None-mv_keys0]</td>
-          <td class="col-duration">0.06</td>
+          <td class="col-duration">0.07</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -2664,7 +2668,7 @@ Correct number of columns (RANSAC): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[None-ransac-None-None-None-lasso-ridge-None-mv_keys0]</td>
-          <td class="col-duration">0.13</td>
+          <td class="col-duration">0.12</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -2914,7 +2918,7 @@ Correct number of columns (RANSAC): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[None-ransac-None-lars-None-lasso-None-ols-mv_keys0]</td>
-          <td class="col-duration">0.14</td>
+          <td class="col-duration">0.13</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -2986,7 +2990,7 @@ Correct number of columns (RANSAC): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[None-ransac-None-lars-elastic_net-None-None-ols-mv_keys0]</td>
-          <td class="col-duration">0.15</td>
+          <td class="col-duration">0.14</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -3004,7 +3008,7 @@ Correct number of columns (RANSAC): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[None-ransac-None-lars-elastic_net-None-ridge-None-mv_keys0]</td>
-          <td class="col-duration">0.15</td>
+          <td class="col-duration">0.14</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -3022,7 +3026,7 @@ Correct number of columns (RANSAC): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[None-ransac-None-lars-elastic_net-None-ridge-ols-mv_keys0]</td>
-          <td class="col-duration">0.17</td>
+          <td class="col-duration">0.16</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -3042,7 +3046,7 @@ Correct number of columns (RANSAC): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[None-ransac-None-lars-elastic_net-lasso-None-None-mv_keys0]</td>
-          <td class="col-duration">0.17</td>
+          <td class="col-duration">0.16</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -3060,7 +3064,7 @@ Correct number of columns (RANSAC): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[None-ransac-None-lars-elastic_net-lasso-None-ols-mv_keys0]</td>
-          <td class="col-duration">0.19</td>
+          <td class="col-duration">0.18</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -3168,7 +3172,7 @@ Correct number of columns (RANSAC): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[None-ransac-lasso_lars-None-None-None-ridge-ols-mv_keys0]</td>
-          <td class="col-duration">0.13</td>
+          <td class="col-duration">0.12</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -3238,7 +3242,7 @@ Correct number of columns (RANSAC): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[None-ransac-lasso_lars-None-None-lasso-ridge-ols-mv_keys0]</td>
-          <td class="col-duration">0.18</td>
+          <td class="col-duration">0.17</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -3348,7 +3352,7 @@ Correct number of columns (RANSAC): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[None-ransac-lasso_lars-None-elastic_net-lasso-None-ols-mv_keys0]</td>
-          <td class="col-duration">0.20</td>
+          <td class="col-duration">0.19</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -3368,7 +3372,7 @@ Correct number of columns (RANSAC): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[None-ransac-lasso_lars-None-elastic_net-lasso-ridge-None-mv_keys0]</td>
-          <td class="col-duration">0.21</td>
+          <td class="col-duration">0.20</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -3388,7 +3392,7 @@ Correct number of columns (RANSAC): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[None-ransac-lasso_lars-None-elastic_net-lasso-ridge-ols-mv_keys0]</td>
-          <td class="col-duration">0.23</td>
+          <td class="col-duration">0.22</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -3444,7 +3448,7 @@ Correct number of columns (RANSAC): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[None-ransac-lasso_lars-lars-None-None-ridge-None-mv_keys0]</td>
-          <td class="col-duration">0.12</td>
+          <td class="col-duration">0.11</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -3462,7 +3466,7 @@ Correct number of columns (RANSAC): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[None-ransac-lasso_lars-lars-None-None-ridge-ols-mv_keys0]</td>
-          <td class="col-duration">0.14</td>
+          <td class="col-duration">0.13</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -3482,7 +3486,7 @@ Correct number of columns (RANSAC): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[None-ransac-lasso_lars-lars-None-lasso-None-None-mv_keys0]</td>
-          <td class="col-duration">0.16</td>
+          <td class="col-duration">0.15</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -3520,7 +3524,7 @@ Correct number of columns (RANSAC): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[None-ransac-lasso_lars-lars-None-lasso-ridge-None-mv_keys0]</td>
-          <td class="col-duration">0.18</td>
+          <td class="col-duration">0.17</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -3600,7 +3604,7 @@ Correct number of columns (RANSAC): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[None-ransac-lasso_lars-lars-elastic_net-None-ridge-None-mv_keys0]</td>
-          <td class="col-duration">0.17</td>
+          <td class="col-duration">0.18</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -3620,7 +3624,7 @@ Correct number of columns (RANSAC): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[None-ransac-lasso_lars-lars-elastic_net-None-ridge-ols-mv_keys0]</td>
-          <td class="col-duration">0.19</td>
+          <td class="col-duration">0.20</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -3642,7 +3646,7 @@ Correct number of columns (RANSAC): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[None-ransac-lasso_lars-lars-elastic_net-lasso-None-None-mv_keys0]</td>
-          <td class="col-duration">0.19</td>
+          <td class="col-duration">0.20</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -3662,7 +3666,7 @@ Correct number of columns (RANSAC): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[None-ransac-lasso_lars-lars-elastic_net-lasso-None-ols-mv_keys0]</td>
-          <td class="col-duration">0.21</td>
+          <td class="col-duration">0.22</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -3730,7 +3734,7 @@ Correct number of columns (RANSAC): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-None-None-None-None-None-None-None-mv_keys0]</td>
-          <td class="col-duration">0.94</td>
+          <td class="col-duration">0.90</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -3742,7 +3746,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-None-None-None-None-None-None-ols-mv_keys0]</td>
-          <td class="col-duration">0.95</td>
+          <td class="col-duration">0.91</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -3756,7 +3760,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-None-None-None-None-None-ridge-None-mv_keys0]</td>
-          <td class="col-duration">0.96</td>
+          <td class="col-duration">0.92</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -3770,7 +3774,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-None-None-None-None-None-ridge-ols-mv_keys0]</td>
-          <td class="col-duration">0.99</td>
+          <td class="col-duration">0.94</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -3786,7 +3790,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-None-None-None-None-lasso-None-None-mv_keys0]</td>
-          <td class="col-duration">0.98</td>
+          <td class="col-duration">0.95</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -3800,7 +3804,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-None-None-None-None-lasso-None-ols-mv_keys0]</td>
-          <td class="col-duration">1.00</td>
+          <td class="col-duration">0.96</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -3816,7 +3820,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-None-None-None-None-lasso-ridge-None-mv_keys0]</td>
-          <td class="col-duration">1.00</td>
+          <td class="col-duration">0.97</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -3832,7 +3836,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-None-None-None-None-lasso-ridge-ols-mv_keys0]</td>
-          <td class="col-duration">1.03</td>
+          <td class="col-duration">0.99</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -3850,7 +3854,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-None-None-None-elastic_net-None-None-None-mv_keys0]</td>
-          <td class="col-duration">0.98</td>
+          <td class="col-duration">0.95</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -3864,7 +3868,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-None-None-None-elastic_net-None-None-ols-mv_keys0]</td>
-          <td class="col-duration">1.00</td>
+          <td class="col-duration">0.97</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -3880,7 +3884,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-None-None-None-elastic_net-None-ridge-None-mv_keys0]</td>
-          <td class="col-duration">1.01</td>
+          <td class="col-duration">0.97</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -3896,7 +3900,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-None-None-None-elastic_net-None-ridge-ols-mv_keys0]</td>
-          <td class="col-duration">1.03</td>
+          <td class="col-duration">1.00</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -3914,7 +3918,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-None-None-None-elastic_net-lasso-None-None-mv_keys0]</td>
-          <td class="col-duration">1.04</td>
+          <td class="col-duration">1.00</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -3930,7 +3934,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-None-None-None-elastic_net-lasso-None-ols-mv_keys0]</td>
-          <td class="col-duration">1.05</td>
+          <td class="col-duration">1.02</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -3948,7 +3952,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-None-None-None-elastic_net-lasso-ridge-None-mv_keys0]</td>
-          <td class="col-duration">1.06</td>
+          <td class="col-duration">1.02</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -3966,7 +3970,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-None-None-None-elastic_net-lasso-ridge-ols-mv_keys0]</td>
-          <td class="col-duration">1.07</td>
+          <td class="col-duration">1.04</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -3986,7 +3990,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-None-None-lars-None-None-None-None-mv_keys0]</td>
-          <td class="col-duration">0.94</td>
+          <td class="col-duration">0.91</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -4000,7 +4004,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-None-None-lars-None-None-None-ols-mv_keys0]</td>
-          <td class="col-duration">0.96</td>
+          <td class="col-duration">0.93</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -4016,7 +4020,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-None-None-lars-None-None-ridge-None-mv_keys0]</td>
-          <td class="col-duration">0.96</td>
+          <td class="col-duration">0.94</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -4032,7 +4036,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-None-None-lars-None-None-ridge-ols-mv_keys0]</td>
-          <td class="col-duration">0.98</td>
+          <td class="col-duration">0.97</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -4050,7 +4054,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-None-None-lars-None-lasso-None-None-mv_keys0]</td>
-          <td class="col-duration">0.98</td>
+          <td class="col-duration">0.97</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -4066,7 +4070,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-None-None-lars-None-lasso-None-ols-mv_keys0]</td>
-          <td class="col-duration">1.01</td>
+          <td class="col-duration">0.99</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -4084,7 +4088,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-None-None-lars-None-lasso-ridge-None-mv_keys0]</td>
-          <td class="col-duration">1.02</td>
+          <td class="col-duration">1.00</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -4102,7 +4106,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-None-None-lars-None-lasso-ridge-ols-mv_keys0]</td>
-          <td class="col-duration">1.04</td>
+          <td class="col-duration">1.01</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -4122,7 +4126,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-None-None-lars-elastic_net-None-None-None-mv_keys0]</td>
-          <td class="col-duration">1.03</td>
+          <td class="col-duration">0.96</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -4138,7 +4142,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-None-None-lars-elastic_net-None-None-ols-mv_keys0]</td>
-          <td class="col-duration">1.02</td>
+          <td class="col-duration">0.99</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -4156,7 +4160,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-None-None-lars-elastic_net-None-ridge-None-mv_keys0]</td>
-          <td class="col-duration">1.04</td>
+          <td class="col-duration">0.99</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -4174,7 +4178,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-None-None-lars-elastic_net-None-ridge-ols-mv_keys0]</td>
-          <td class="col-duration">1.06</td>
+          <td class="col-duration">1.02</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -4194,7 +4198,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-None-None-lars-elastic_net-lasso-None-None-mv_keys0]</td>
-          <td class="col-duration">1.06</td>
+          <td class="col-duration">1.02</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -4212,7 +4216,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-None-None-lars-elastic_net-lasso-None-ols-mv_keys0]</td>
-          <td class="col-duration">1.08</td>
+          <td class="col-duration">1.04</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -4232,7 +4236,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-None-None-lars-elastic_net-lasso-ridge-None-mv_keys0]</td>
-          <td class="col-duration">1.09</td>
+          <td class="col-duration">1.04</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -4252,7 +4256,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-None-None-lars-elastic_net-lasso-ridge-ols-mv_keys0]</td>
-          <td class="col-duration">1.11</td>
+          <td class="col-duration">1.07</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -4274,7 +4278,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-None-lasso_lars-None-None-None-None-None-mv_keys0]</td>
-          <td class="col-duration">0.96</td>
+          <td class="col-duration">0.93</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -4288,7 +4292,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-None-lasso_lars-None-None-None-None-ols-mv_keys0]</td>
-          <td class="col-duration">0.98</td>
+          <td class="col-duration">0.95</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -4304,7 +4308,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-None-lasso_lars-None-None-None-ridge-None-mv_keys0]</td>
-          <td class="col-duration">0.99</td>
+          <td class="col-duration">0.96</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -4320,7 +4324,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-None-lasso_lars-None-None-None-ridge-ols-mv_keys0]</td>
-          <td class="col-duration">1.01</td>
+          <td class="col-duration">0.97</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -4338,7 +4342,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-None-lasso_lars-None-None-lasso-None-None-mv_keys0]</td>
-          <td class="col-duration">1.00</td>
+          <td class="col-duration">0.98</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -4354,7 +4358,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-None-lasso_lars-None-None-lasso-None-ols-mv_keys0]</td>
-          <td class="col-duration">1.02</td>
+          <td class="col-duration">1.00</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -4372,7 +4376,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-None-lasso_lars-None-None-lasso-ridge-None-mv_keys0]</td>
-          <td class="col-duration">1.03</td>
+          <td class="col-duration">1.00</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -4390,7 +4394,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-None-lasso_lars-None-None-lasso-ridge-ols-mv_keys0]</td>
-          <td class="col-duration">1.06</td>
+          <td class="col-duration">1.03</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -4410,7 +4414,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-None-lasso_lars-None-elastic_net-None-None-None-mv_keys0]</td>
-          <td class="col-duration">1.01</td>
+          <td class="col-duration">0.97</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -4426,7 +4430,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-None-lasso_lars-None-elastic_net-None-None-ols-mv_keys0]</td>
-          <td class="col-duration">1.02</td>
+          <td class="col-duration">1.00</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -4444,7 +4448,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-None-lasso_lars-None-elastic_net-None-ridge-None-mv_keys0]</td>
-          <td class="col-duration">1.03</td>
+          <td class="col-duration">1.01</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -4462,7 +4466,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-None-lasso_lars-None-elastic_net-None-ridge-ols-mv_keys0]</td>
-          <td class="col-duration">1.06</td>
+          <td class="col-duration">1.03</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -4482,7 +4486,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-None-lasso_lars-None-elastic_net-lasso-None-None-mv_keys0]</td>
-          <td class="col-duration">1.07</td>
+          <td class="col-duration">1.04</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -4500,7 +4504,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-None-lasso_lars-None-elastic_net-lasso-None-ols-mv_keys0]</td>
-          <td class="col-duration">1.09</td>
+          <td class="col-duration">1.06</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -4520,7 +4524,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-None-lasso_lars-None-elastic_net-lasso-ridge-None-mv_keys0]</td>
-          <td class="col-duration">1.10</td>
+          <td class="col-duration">1.06</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -4540,7 +4544,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-None-lasso_lars-None-elastic_net-lasso-ridge-ols-mv_keys0]</td>
-          <td class="col-duration">1.11</td>
+          <td class="col-duration">1.08</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -4562,7 +4566,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-None-lasso_lars-lars-None-None-None-None-mv_keys0]</td>
-          <td class="col-duration">0.97</td>
+          <td class="col-duration">0.94</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -4578,7 +4582,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-None-lasso_lars-lars-None-None-None-ols-mv_keys0]</td>
-          <td class="col-duration">0.99</td>
+          <td class="col-duration">0.96</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -4596,7 +4600,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-None-lasso_lars-lars-None-None-ridge-None-mv_keys0]</td>
-          <td class="col-duration">1.00</td>
+          <td class="col-duration">0.97</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -4614,7 +4618,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-None-lasso_lars-lars-None-None-ridge-ols-mv_keys0]</td>
-          <td class="col-duration">1.02</td>
+          <td class="col-duration">0.99</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -4634,7 +4638,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-None-lasso_lars-lars-None-lasso-None-None-mv_keys0]</td>
-          <td class="col-duration">1.02</td>
+          <td class="col-duration">1.00</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -4672,7 +4676,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-None-lasso_lars-lars-None-lasso-ridge-None-mv_keys0]</td>
-          <td class="col-duration">1.05</td>
+          <td class="col-duration">1.02</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -4692,7 +4696,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-None-lasso_lars-lars-None-lasso-ridge-ols-mv_keys0]</td>
-          <td class="col-duration">1.09</td>
+          <td class="col-duration">1.04</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -4714,7 +4718,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-None-lasso_lars-lars-elastic_net-None-None-None-mv_keys0]</td>
-          <td class="col-duration">1.03</td>
+          <td class="col-duration">0.99</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -4732,7 +4736,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-None-lasso_lars-lars-elastic_net-None-None-ols-mv_keys0]</td>
-          <td class="col-duration">1.03</td>
+          <td class="col-duration">1.01</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -4752,7 +4756,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-None-lasso_lars-lars-elastic_net-None-ridge-None-mv_keys0]</td>
-          <td class="col-duration">1.05</td>
+          <td class="col-duration">1.02</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -4772,7 +4776,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-None-lasso_lars-lars-elastic_net-None-ridge-ols-mv_keys0]</td>
-          <td class="col-duration">1.08</td>
+          <td class="col-duration">1.06</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -4794,7 +4798,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-None-lasso_lars-lars-elastic_net-lasso-None-None-mv_keys0]</td>
-          <td class="col-duration">1.08</td>
+          <td class="col-duration">1.05</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -4814,7 +4818,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-None-lasso_lars-lars-elastic_net-lasso-None-ols-mv_keys0]</td>
-          <td class="col-duration">1.10</td>
+          <td class="col-duration">1.07</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -4836,7 +4840,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-None-lasso_lars-lars-elastic_net-lasso-ridge-None-mv_keys0]</td>
-          <td class="col-duration">1.11</td>
+          <td class="col-duration">1.08</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -4858,7 +4862,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-None-lasso_lars-lars-elastic_net-lasso-ridge-ols-mv_keys0]</td>
-          <td class="col-duration">1.13</td>
+          <td class="col-duration">1.10</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -4882,7 +4886,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-ransac-None-None-None-None-None-None-mv_keys0]</td>
-          <td class="col-duration">0.95</td>
+          <td class="col-duration">0.93</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -4896,7 +4900,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-ransac-None-None-None-None-None-ols-mv_keys0]</td>
-          <td class="col-duration">0.97</td>
+          <td class="col-duration">0.94</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -4912,7 +4916,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-ransac-None-None-None-None-ridge-None-mv_keys0]</td>
-          <td class="col-duration">0.97</td>
+          <td class="col-duration">0.95</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -4928,7 +4932,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-ransac-None-None-None-None-ridge-ols-mv_keys0]</td>
-          <td class="col-duration">0.99</td>
+          <td class="col-duration">0.97</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -4946,7 +4950,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-ransac-None-None-None-lasso-None-None-mv_keys0]</td>
-          <td class="col-duration">1.02</td>
+          <td class="col-duration">0.98</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -4962,7 +4966,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-ransac-None-None-None-lasso-None-ols-mv_keys0]</td>
-          <td class="col-duration">1.04</td>
+          <td class="col-duration">1.00</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -4980,7 +4984,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-ransac-None-None-None-lasso-ridge-None-mv_keys0]</td>
-          <td class="col-duration">1.04</td>
+          <td class="col-duration">1.01</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -4998,7 +5002,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-ransac-None-None-None-lasso-ridge-ols-mv_keys0]</td>
-          <td class="col-duration">1.06</td>
+          <td class="col-duration">1.03</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -5018,7 +5022,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-ransac-None-None-elastic_net-None-None-None-mv_keys0]</td>
-          <td class="col-duration">1.01</td>
+          <td class="col-duration">0.98</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -5034,7 +5038,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-ransac-None-None-elastic_net-None-None-ols-mv_keys0]</td>
-          <td class="col-duration">1.03</td>
+          <td class="col-duration">1.00</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -5052,7 +5056,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-ransac-None-None-elastic_net-None-ridge-None-mv_keys0]</td>
-          <td class="col-duration">1.04</td>
+          <td class="col-duration">1.01</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -5070,7 +5074,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-ransac-None-None-elastic_net-None-ridge-ols-mv_keys0]</td>
-          <td class="col-duration">1.06</td>
+          <td class="col-duration">1.05</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -5090,7 +5094,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-ransac-None-None-elastic_net-lasso-None-None-mv_keys0]</td>
-          <td class="col-duration">1.06</td>
+          <td class="col-duration">1.03</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -5108,7 +5112,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-ransac-None-None-elastic_net-lasso-None-ols-mv_keys0]</td>
-          <td class="col-duration">1.09</td>
+          <td class="col-duration">1.05</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -5128,7 +5132,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-ransac-None-None-elastic_net-lasso-ridge-None-mv_keys0]</td>
-          <td class="col-duration">1.09</td>
+          <td class="col-duration">1.05</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -5148,7 +5152,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-ransac-None-None-elastic_net-lasso-ridge-ols-mv_keys0]</td>
-          <td class="col-duration">1.11</td>
+          <td class="col-duration">1.07</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -5170,7 +5174,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-ransac-None-lars-None-None-None-None-mv_keys0]</td>
-          <td class="col-duration">0.98</td>
+          <td class="col-duration">0.95</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -5186,7 +5190,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-ransac-None-lars-None-None-None-ols-mv_keys0]</td>
-          <td class="col-duration">0.99</td>
+          <td class="col-duration">0.97</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -5204,7 +5208,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-ransac-None-lars-None-None-ridge-None-mv_keys0]</td>
-          <td class="col-duration">1.01</td>
+          <td class="col-duration">0.97</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -5222,7 +5226,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-ransac-None-lars-None-None-ridge-ols-mv_keys0]</td>
-          <td class="col-duration">1.03</td>
+          <td class="col-duration">0.99</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -5242,7 +5246,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-ransac-None-lars-None-lasso-None-None-mv_keys0]</td>
-          <td class="col-duration">1.04</td>
+          <td class="col-duration">1.00</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -5260,7 +5264,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-ransac-None-lars-None-lasso-None-ols-mv_keys0]</td>
-          <td class="col-duration">1.06</td>
+          <td class="col-duration">1.03</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -5280,7 +5284,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-ransac-None-lars-None-lasso-ridge-None-mv_keys0]</td>
-          <td class="col-duration">1.05</td>
+          <td class="col-duration">1.03</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -5300,7 +5304,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-ransac-None-lars-None-lasso-ridge-ols-mv_keys0]</td>
-          <td class="col-duration">1.08</td>
+          <td class="col-duration">1.05</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -5322,7 +5326,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-ransac-None-lars-elastic_net-None-None-None-mv_keys0]</td>
-          <td class="col-duration">1.03</td>
+          <td class="col-duration">1.00</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -5340,7 +5344,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-ransac-None-lars-elastic_net-None-None-ols-mv_keys0]</td>
-          <td class="col-duration">1.05</td>
+          <td class="col-duration">1.03</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -5360,7 +5364,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-ransac-None-lars-elastic_net-None-ridge-None-mv_keys0]</td>
-          <td class="col-duration">1.06</td>
+          <td class="col-duration">1.03</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -5380,7 +5384,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-ransac-None-lars-elastic_net-None-ridge-ols-mv_keys0]</td>
-          <td class="col-duration">1.09</td>
+          <td class="col-duration">1.05</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -5402,7 +5406,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-ransac-None-lars-elastic_net-lasso-None-None-mv_keys0]</td>
-          <td class="col-duration">1.09</td>
+          <td class="col-duration">1.05</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -5422,7 +5426,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-ransac-None-lars-elastic_net-lasso-None-ols-mv_keys0]</td>
-          <td class="col-duration">1.10</td>
+          <td class="col-duration">1.07</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -5444,7 +5448,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-ransac-None-lars-elastic_net-lasso-ridge-None-mv_keys0]</td>
-          <td class="col-duration">1.11</td>
+          <td class="col-duration">1.08</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -5466,7 +5470,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-ransac-None-lars-elastic_net-lasso-ridge-ols-mv_keys0]</td>
-          <td class="col-duration">1.12</td>
+          <td class="col-duration">1.07</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -5490,7 +5494,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-ransac-lasso_lars-None-None-None-None-None-mv_keys0]</td>
-          <td class="col-duration">0.99</td>
+          <td class="col-duration">0.94</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -5506,7 +5510,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-ransac-lasso_lars-None-None-None-None-ols-mv_keys0]</td>
-          <td class="col-duration">1.02</td>
+          <td class="col-duration">0.97</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -5524,7 +5528,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-ransac-lasso_lars-None-None-None-ridge-None-mv_keys0]</td>
-          <td class="col-duration">1.02</td>
+          <td class="col-duration">0.99</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -5542,7 +5546,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-ransac-lasso_lars-None-None-None-ridge-ols-mv_keys0]</td>
-          <td class="col-duration">1.03</td>
+          <td class="col-duration">1.00</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -5562,7 +5566,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-ransac-lasso_lars-None-None-lasso-None-None-mv_keys0]</td>
-          <td class="col-duration">1.04</td>
+          <td class="col-duration">1.01</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -5580,7 +5584,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-ransac-lasso_lars-None-None-lasso-None-ols-mv_keys0]</td>
-          <td class="col-duration">1.08</td>
+          <td class="col-duration">1.03</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -5600,7 +5604,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-ransac-lasso_lars-None-None-lasso-ridge-None-mv_keys0]</td>
-          <td class="col-duration">1.07</td>
+          <td class="col-duration">1.04</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -5620,7 +5624,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-ransac-lasso_lars-None-None-lasso-ridge-ols-mv_keys0]</td>
-          <td class="col-duration">1.09</td>
+          <td class="col-duration">1.06</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -5642,7 +5646,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-ransac-lasso_lars-None-elastic_net-None-None-None-mv_keys0]</td>
-          <td class="col-duration">1.05</td>
+          <td class="col-duration">1.02</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -5660,7 +5664,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-ransac-lasso_lars-None-elastic_net-None-None-ols-mv_keys0]</td>
-          <td class="col-duration">1.06</td>
+          <td class="col-duration">1.04</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -5680,7 +5684,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-ransac-lasso_lars-None-elastic_net-None-ridge-None-mv_keys0]</td>
-          <td class="col-duration">1.07</td>
+          <td class="col-duration">1.04</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -5700,7 +5704,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-ransac-lasso_lars-None-elastic_net-None-ridge-ols-mv_keys0]</td>
-          <td class="col-duration">1.09</td>
+          <td class="col-duration">1.06</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -5722,7 +5726,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-ransac-lasso_lars-None-elastic_net-lasso-None-None-mv_keys0]</td>
-          <td class="col-duration">1.08</td>
+          <td class="col-duration">1.05</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -5742,7 +5746,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-ransac-lasso_lars-None-elastic_net-lasso-None-ols-mv_keys0]</td>
-          <td class="col-duration">1.10</td>
+          <td class="col-duration">1.08</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -5764,7 +5768,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-ransac-lasso_lars-None-elastic_net-lasso-ridge-None-mv_keys0]</td>
-          <td class="col-duration">1.12</td>
+          <td class="col-duration">1.09</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -5786,7 +5790,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-ransac-lasso_lars-None-elastic_net-lasso-ridge-ols-mv_keys0]</td>
-          <td class="col-duration">1.13</td>
+          <td class="col-duration">1.12</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -5810,7 +5814,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-ransac-lasso_lars-lars-None-None-None-None-mv_keys0]</td>
-          <td class="col-duration">1.00</td>
+          <td class="col-duration">0.96</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -5828,7 +5832,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-ransac-lasso_lars-lars-None-None-None-ols-mv_keys0]</td>
-          <td class="col-duration">1.03</td>
+          <td class="col-duration">0.98</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -5848,7 +5852,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-ransac-lasso_lars-lars-None-None-ridge-None-mv_keys0]</td>
-          <td class="col-duration">1.03</td>
+          <td class="col-duration">0.98</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -5868,7 +5872,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-ransac-lasso_lars-lars-None-None-ridge-ols-mv_keys0]</td>
-          <td class="col-duration">1.05</td>
+          <td class="col-duration">0.99</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -5890,7 +5894,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-ransac-lasso_lars-lars-None-lasso-None-None-mv_keys0]</td>
-          <td class="col-duration">1.07</td>
+          <td class="col-duration">1.02</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -5910,7 +5914,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-ransac-lasso_lars-lars-None-lasso-None-ols-mv_keys0]</td>
-          <td class="col-duration">1.08</td>
+          <td class="col-duration">1.04</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -5932,7 +5936,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-ransac-lasso_lars-lars-None-lasso-ridge-None-mv_keys0]</td>
-          <td class="col-duration">1.09</td>
+          <td class="col-duration">1.04</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -5954,7 +5958,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-ransac-lasso_lars-lars-None-lasso-ridge-ols-mv_keys0]</td>
-          <td class="col-duration">1.12</td>
+          <td class="col-duration">1.07</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -5978,7 +5982,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-ransac-lasso_lars-lars-elastic_net-None-None-None-mv_keys0]</td>
-          <td class="col-duration">1.07</td>
+          <td class="col-duration">1.04</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -5998,7 +6002,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-ransac-lasso_lars-lars-elastic_net-None-None-ols-mv_keys0]</td>
-          <td class="col-duration">1.10</td>
+          <td class="col-duration">1.05</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -6020,7 +6024,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-ransac-lasso_lars-lars-elastic_net-None-ridge-None-mv_keys0]</td>
-          <td class="col-duration">1.10</td>
+          <td class="col-duration">1.07</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -6042,7 +6046,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-ransac-lasso_lars-lars-elastic_net-None-ridge-ols-mv_keys0]</td>
-          <td class="col-duration">1.12</td>
+          <td class="col-duration">1.08</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -6066,7 +6070,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-ransac-lasso_lars-lars-elastic_net-lasso-None-None-mv_keys0]</td>
-          <td class="col-duration">1.12</td>
+          <td class="col-duration">1.08</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -6088,7 +6092,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-ransac-lasso_lars-lars-elastic_net-lasso-None-ols-mv_keys0]</td>
-          <td class="col-duration">1.13</td>
+          <td class="col-duration">1.10</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -6112,7 +6116,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-ransac-lasso_lars-lars-elastic_net-lasso-ridge-None-mv_keys0]</td>
-          <td class="col-duration">1.14</td>
+          <td class="col-duration">1.11</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -6136,7 +6140,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_combo_cal_skl[theil_sen-ransac-lasso_lars-lars-elastic_net-lasso-ridge-ols-mv_keys0]</td>
-          <td class="col-duration">1.16</td>
+          <td class="col-duration">1.13</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -6162,7 +6166,7 @@ Correct number of columns (Theil Sen): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_bayesian[Gaussian-mv_keys0]</td>
-          <td class="col-duration">37.81</td>
+          <td class="col-duration">46.47</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
@@ -6174,7 +6178,7 @@ Correct number of columns (Bayesian (Gaussian)): True
         <tr>
           <td class="col-result">Passed</td>
           <td class="col-name">tests/test_coefficients.py::test_bayesian[Student T-mv_keys0]</td>
-          <td class="col-duration">216.27</td>
+          <td class="col-duration">231.01</td>
           <td class="col-links"></td></tr>
         <tr>
           <td class="extra" colspan="4">
