@@ -1,4 +1,5 @@
-from typing import Literal, Optional, Union
+import re
+from typing import Literal, Optional
 
 import matplotlib as mpl
 import matplotlib.pyplot as plt
@@ -27,7 +28,7 @@ class Results:
         Calibration coefficients
     _errors : dict[str, pd.DataFrame]
         Dictionary of dataframes, each key representing a
-        different calibration method
+        different subset of the data
     _cal : Calibrate
         Calibrate object that contains train and test calibrated by
         coefficients
@@ -93,8 +94,8 @@ class Results:
                 "Uncalibrated Train",
                 "Uncalibrated Test",
                 "Uncalibrated Full",
-                "Bayesian Minimum",
-                "Bayesian Maximum"
+                "Minimum",
+                "Maximum"
                 ]
             ] = [
             "Calibrated Test",
@@ -129,14 +130,26 @@ class Results:
                 self.test,
                 self.coefficients
                 )
-        self.y_pred = self._cal.return_measurements()
+        self.y_subsets = self._cal.return_measurements()
+        self.y_full = self._cal.join_measurements()
         self._datasets = self._prepare_datasets(test_sets)
         self.x_name = x_name
         self.y_name = y_name
 
     def _prepare_datasets(
             self,
-            test_sets: list[str]
+            test_sets: list[
+                Literal[
+                    "Calibrated Train",
+                    "Calibrated Test",
+                    "Calibrated Full",
+                    "Uncalibrated Train",
+                    "Uncalibrated Test",
+                    "Uncalibrated Full",
+                    "Minimum",
+                    "Maximum"
+                    ]
+                ]
             ) -> dict[str, dict[str, pd.DataFrame]]:
         """
         Prepare the datasets to be analysed
@@ -161,13 +174,13 @@ class Results:
                     Base x measurements from testing set
                 - Uncalibrated Full
                     Base x measurements from testing set
-                - Bayesian Minimum
+                - Minimum
                     Mean bayesian coefficients - 2 times standard deviation
-                - Bayesian Maximum
+                - Maximum
                     Mean bayesian coefficients + 2 times standard deviation
         Returns
         -------
-        datasets: dict[str, dict[str, pd.DataFrame]]
+        dict[str, dict[str, pd.DataFrame]]
             Contains all subsets of the data to be analysed
         """
         uncalibrated_datasets = {
@@ -180,45 +193,99 @@ class Results:
                     "y": self.test.loc[:, ['y']]
                     },
                 "Uncalibrated Full": {
-                    "x": pd.concat(
-                        [self.train.loc[:, ['x']], self.test.loc[:, ['x']]]
-                        ),
-                    "y": pd.concat(
-                        [self.train.loc[:, ['y']], self.test.loc[:, ['y']]]
-                        )
+                    "x": self.y_full['Uncalibrated'].loc[:, ['x']],
+                    "y": self.y_full['Uncalibrated'].loc[:, ['y']]
                     }
                 }
         pymc_bool = all(
                 [
-                    any(["mean." in key for key in self.y_pred.keys()]),
-                    any(["min." in key for key in self.y_pred.keys()]),
-                    any(["max." in key for key in self.y_pred.keys()])
+                    any(["Mean." in key for key in self.y_subsets.keys()]),
+                    any(["Min." in key for key in self.y_subsets.keys()]),
+                    any(["Max." in key for key in self.y_subsets.keys()])
                     ]
                 )
+        sets_to_use: list[str] = list(
+                filter(
+                    lambda x: x not in ["Minimum", "Maximum"],
+                    test_sets
+                    )
+                )
         if pymc_bool:
-            pass
+            all_datasets = uncalibrated_datasets | {
+                    "Calibrated Train (Mean)": {
+                        "x": self.y_subsets['Mean.Train'],
+                        "y": self.train.loc[:, ['y']]
+                        },
+                    "Calibrated Test (Mean)": {
+                        "x": self.y_subsets['Mean.Test'],
+                        "y": self.test.loc[:, ['y']]
+                        },
+                    "Calibrated Full (Mean)": {
+                        "x": self.y_full['Mean.Calibrated'],
+                        "y": self.y_full['Uncalibrated'].loc[:, ['y']]
+                        },
+                    "Calibrated Train (Minimum)": {
+                        "x": self.y_subsets['Minimum.Train'],
+                        "y": self.train.loc[:, ['y']]
+                        },
+                    "Calibrated Test (Minimum)": {
+                        "x": self.y_subsets['Minimum.Test'],
+                        "y": self.test.loc[:, ['y']]
+                        },
+                    "Calibrated Full (Minimum)": {
+                        "x": self.y_full['Minimum.Calibrated'],
+                        "y": self.y_full['Uncalibrated'].loc[:, ['y']]
+                        },
+                    "Calibrated Train (Maximum)": {
+                        "x": self.y_subsets['Maximum.Train'],
+                        "y": self.train.loc[:, ['y']]
+                        },
+                    "Calibrated Test (Maximum)": {
+                        "x": self.y_subsets['Maximum.Test'],
+                        "y": self.test.loc[:, ['y']]
+                        },
+                    "Calibrated Full (Maximum)": {
+                        "x": self.y_full['Maximum.Calibrated'],
+                        "y": self.y_full['Uncalibrated'].loc[:, ['y']]
+                        },
+                    }
+            min_max = filter(
+                    lambda x: x in ["Minimum", "Maximum"],
+                    test_sets
+                    )
+            pymc_sets_to_use = list(
+                    filter(
+                        lambda x: not bool(re.search(r"^Calibrated ", x)),
+                        sets_to_use
+                        )
+                    )
+            for sub_pymc in ["Mean"] + list(min_max):
+                for cal_subset in filter(
+                        lambda x: bool(re.search(r"^Calibrated ", x)),
+                        sets_to_use
+                        ):
+                    pymc_sets_to_use.append(f"{cal_subset} ({sub_pymc})")
+            sets_to_use = pymc_sets_to_use
         else:
-            skl_datasets = uncalibrated_datasets | {
+            all_datasets = uncalibrated_datasets | {
                     "Calibrated Train": {
-                        "x": self.y_pred['Train'],
+                        "x": self.y_subsets['Train'],
                         "y": self.train.loc[:, ['y']]
                         },
                     "Calibrated Test": {
-                        "x": self.y_pred['Test'],
+                        "x": self.y_subsets['Test'],
                         "y": self.test.loc[:, ['y']]
                         },
                     "Calibrated Full": {
-                        "x": pd.concat(
-                            [self.y_pred['Train'], self.y_pred['Test']]
-                            ),
-                        "y": pd.concat(
-                            [self.train.loc[:, ['y']], self.test.loc[:, ['y']]]
-                            )
+                        "x": self.y_full['Calibrated'],
+                        "y": self.y_full['Uncalibrated'].loc[:, ['y']]
                         }
                     }
 
-
-        return datasets
+        return {
+                key: item for key, item in all_datasets.items()
+                if key in sets_to_use
+                }
 
     def explained_variance_score(self):
         """Calculate the explained variance score between the true values (y)

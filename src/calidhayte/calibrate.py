@@ -1,6 +1,5 @@
 import math
 import re
-from typing import Dict
 
 import pandas as pd
 
@@ -173,7 +172,7 @@ class Calibrate:
                         )
             self.y_pred[dset_name] = cal_dataset
 
-    def join_measurements(self) -> Dict[str, pd.DataFrame]:
+    def join_measurements(self) -> dict[str, pd.DataFrame]:
         """ Joins test and train measurements into one dataframe and sorts them
         by index to recreate the initial measurements
 
@@ -227,7 +226,7 @@ class Calibrate:
 
         return joined
 
-    def return_measurements(self) -> Dict[str, pd.DataFrame]:
+    def return_measurements(self) -> dict[str, pd.DataFrame]:
         """ Returns the calibrated measurements
 
         Parameters
