@@ -196,8 +196,6 @@ class Calibrate:
         joined = dict()
         joined['Uncalibrated'] = pd.concat([self.test, self.train]).sort_index()
 
-        print(self.y_pred)
-
         pymc_bool = any(
                 [
                     re.search(r"^Mean\.", key)

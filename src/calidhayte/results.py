@@ -1,3 +1,4 @@
+from collections import defaultdict
 import re
 from typing import Literal, Optional
 
@@ -86,7 +87,7 @@ class Results:
         train: pd.DataFrame,
         test: pd.DataFrame,
         coefficients: pd.DataFrame,
-        test_sets: list[
+        datasets_to_use: list[
             Literal[
                 "Calibrated Train",
                 "Calibrated Test",
@@ -124,7 +125,9 @@ class Results:
         self.train = train
         self.test = test
         self.coefficients = coefficients
-        self._errors: dict[str, pd.DataFrame] = dict()
+        self._errors: defaultdict[str, pd.DataFrame] = defaultdict(
+                pd.DataFrame
+                )
         self._cal = Calibrate(
                 self.train,
                 self.test,
@@ -132,13 +135,13 @@ class Results:
                 )
         self.y_subsets = self._cal.return_measurements()
         self.y_full = self._cal.join_measurements()
-        self._datasets = self._prepare_datasets(test_sets)
+        self._datasets = self._prepare_datasets(datasets_to_use)
         self.x_name = x_name
         self.y_name = y_name
 
     def _prepare_datasets(
             self,
-            test_sets: list[
+            datasets_to_use: list[
                 Literal[
                     "Calibrated Train",
                     "Calibrated Test",
@@ -156,7 +159,7 @@ class Results:
 
         Parameters
         ----------
-        test_sets : list[str]
+        datasets_to_use : list[str]
             List containing datasets to use
             Datasets are as follows:
                 - Calibrated Train
@@ -200,18 +203,12 @@ class Results:
         pymc_bool = all(
                 [
                     any(["Mean." in key for key in self.y_subsets.keys()]),
-                    any(["Min." in key for key in self.y_subsets.keys()]),
-                    any(["Max." in key for key in self.y_subsets.keys()])
+                    any(["Minimum." in key for key in self.y_subsets.keys()]),
+                    any(["Maximum." in key for key in self.y_subsets.keys()])
                     ]
                 )
-        sets_to_use: list[str] = list(
-                filter(
-                    lambda x: x not in ["Minimum", "Maximum"],
-                    test_sets
-                    )
-                )
         if pymc_bool:
-            all_datasets = uncalibrated_datasets | {
+            cal_datasets = {
                     "Calibrated Train (Mean)": {
                         "x": self.y_subsets['Mean.Train'],
                         "y": self.train.loc[:, ['y']]
@@ -249,25 +246,8 @@ class Results:
                         "y": self.y_full['Uncalibrated'].loc[:, ['y']]
                         },
                     }
-            min_max = filter(
-                    lambda x: x in ["Minimum", "Maximum"],
-                    test_sets
-                    )
-            pymc_sets_to_use = list(
-                    filter(
-                        lambda x: not bool(re.search(r"^Calibrated ", x)),
-                        sets_to_use
-                        )
-                    )
-            for sub_pymc in ["Mean"] + list(min_max):
-                for cal_subset in filter(
-                        lambda x: bool(re.search(r"^Calibrated ", x)),
-                        sets_to_use
-                        ):
-                    pymc_sets_to_use.append(f"{cal_subset} ({sub_pymc})")
-            sets_to_use = pymc_sets_to_use
         else:
-            all_datasets = uncalibrated_datasets | {
+            cal_datasets = {
                     "Calibrated Train": {
                         "x": self.y_subsets['Train'],
                         "y": self.train.loc[:, ['y']]
@@ -281,11 +261,33 @@ class Results:
                         "y": self.y_full['Uncalibrated'].loc[:, ['y']]
                         }
                     }
+        datasets = uncalibrated_datasets | cal_datasets
+        uncal_sets = filter(
+                lambda x: bool(re.search(r'^Uncalibrated ', x)),
+                datasets_to_use
+                )
+        cal_sets = filter(
+                lambda x: bool(re.search(r'^Calibrated ', x)),
+                datasets_to_use
+                )
+        selected_datasets = dict()
+        for uncal_key in uncal_sets:
+            selected_datasets[str(uncal_key)] = datasets[uncal_key]
+        if pymc_bool:
+            min_max_sets = filter(
+                    lambda x: bool(re.search(r'^Minimum|^Maximum', x)),
+                    datasets_to_use
+                    )
+            for cal_key in cal_sets:
+                for pymc_subset in ['Mean'] + list(min_max_sets):
+                    selected_datasets[
+                            f'{cal_key} ({pymc_subset})'
+                            ] = datasets[f'{cal_key} ({pymc_subset})']
+        else:
+            for cal_key in cal_sets:
+                selected_datasets[str(cal_key)] = datasets[cal_key]
 
-        return {
-                key: item for key, item in all_datasets.items()
-                if key in sets_to_use
-                }
+        return selected_datasets
 
     def explained_variance_score(self):
         """Calculate the explained variance score between the true values (y)
@@ -295,14 +297,14 @@ class Results:
         https://scikit-learn.org/stable/modules/generated/
         sklearn.metrics.explained_variance_score
         """
-        error_name = "Explained Variance Score"
-        for method, combo in self.combos.items():
-            for name, pred, true in combo:
-                if len(self._errors[name]["Variable"]) == len(self._errors[name][method]):
-                    self._errors[name]["Variable"].append(error_name)
-                self._errors[name][method].append(
-                    met.explained_variance_score(true, pred)
-                )
+        for dset_key, dset in self._datasets.items():
+            for var in dset['x'].columns:
+                self._errors[dset_key].loc[
+                        "Explained Variance Score", var
+                        ] = met.explained_variance_score(
+                                dset['y'].loc[:, 'y'],
+                                dset['x'].loc[:, var]
+                                )
 
     def max(self):
         """Calculate the max error between the true values (y)
@@ -312,12 +314,14 @@ class Results:
         https://scikit-learn.org/stable/modules/generated/
         sklearn.metrics.max_error
         """
-        error_name = "Max Error"
-        for method, combo in self.combos.items():
-            for name, pred, true in combo:
-                if len(self._errors[name]["Variable"]) == len(self._errors[name][method]):
-                    self._errors[name]["Variable"].append(error_name)
-                self._errors[name][method].append(met.max_error(true, pred))
+        for dset_key, dset in self._datasets.items():
+            for var in dset['x'].columns:
+                self._errors[dset_key].loc[
+                        "Max Error", var
+                        ] = met.max_error(
+                                dset['y'].loc[:, 'y'],
+                                dset['x'].loc[:, var]
+                                )
 
     def mean_absolute(self):
         """Calculate the mean absolute error between the true values (y)
@@ -327,12 +331,14 @@ class Results:
         https://scikit-learn.org/stable/modules/generated/
         sklearn.metrics.mean_absolute_error
         """
-        error_name = "Mean Absolute Error"
-        for method, combo in self.combos.items():
-            for name, pred, true in combo:
-                if len(self._errors[name]["Variable"]) == len(self._errors[name][method]):
-                    self._errors[name]["Variable"].append(error_name)
-                self._errors[name][method].append(met.mean_absolute_error(true, pred))
+        for dset_key, dset in self._datasets.items():
+            for var in dset['x'].columns:
+                self._errors[dset_key].loc[
+                        "Mean Absolute Error", var
+                        ] = met.mean_absolute_error(
+                                dset['y'].loc[:, 'y'],
+                                dset['x'].loc[:, var]
+                                )
 
     def root_mean_squared(self):
         """Calculate the root mean squared error between the true values (y)
@@ -342,14 +348,15 @@ class Results:
         https://scikit-learn.org/stable/modules/generated/
         sklearn.metrics.mean_squared_error
         """
-        error_name = "Root Mean Squared Error"
-        for method, combo in self.combos.items():
-            for name, pred, true in combo:
-                if len(self._errors[name]["Variable"]) == len(self._errors[name][method]):
-                    self._errors[name]["Variable"].append(error_name)
-                self._errors[name][method].append(
-                    met.mean_squared_error(true, pred, squared=False)
-                )
+        for dset_key, dset in self._datasets.items():
+            for var in dset['x'].columns:
+                self._errors[dset_key].loc[
+                        "Root Mean Squared Error", var
+                        ] = met.mean_squared_error(
+                                dset['y'].loc[:, 'y'],
+                                dset['x'].loc[:, var],
+                                squared=False
+                                )
 
     def root_mean_squared_log(self):
         """Calculate the root mean squared log error between the true values (y)
@@ -359,14 +366,15 @@ class Results:
         https://scikit-learn.org/stable/modules/generated/
         sklearn.metrics.mean_squared_log_error
         """
-        error_name = "Root Mean Squared Log Error"
-        for method, combo in self.combos.items():
-            for name, pred, true in combo:
-                if len(self._errors[name]["Variable"]) == len(self._errors[name][method]):
-                    self._errors[name]["Variable"].append(error_name)
-                self._errors[name][method].append(
-                    met.mean_squared_log_error(true, pred, squared=False)
-                )
+        for dset_key, dset in self._datasets.items():
+            for var in dset['x'].columns:
+                self._errors[dset_key].loc[
+                        "Root Mean Squared Log Error", var
+                        ] = met.mean_squared_log_error(
+                                dset['y'].loc[:, 'y'],
+                                dset['x'].loc[:, var],
+                                squared=False
+                                )
 
     def median_absolute(self):
         """Calculate the median absolute error between the true values (y)
@@ -376,12 +384,14 @@ class Results:
         https://scikit-learn.org/stable/modules/generated/
         sklearn.metrics.median_absolute_error
         """
-        error_name = "Median Absolute Error"
-        for method, combo in self.combos.items():
-            for name, pred, true in combo:
-                if len(self._errors[name]["Variable"]) == len(self._errors[name][method]):
-                    self._errors[name]["Variable"].append(error_name)
-                self._errors[name][method].append(met.median_absolute_error(true, pred))
+        for dset_key, dset in self._datasets.items():
+            for var in dset['x'].columns:
+                self._errors[dset_key].loc[
+                        "Median Absolute Error", var
+                        ] = met.median_absolute_error(
+                                dset['y'].loc[:, 'y'],
+                                dset['x'].loc[:, var]
+                                )
 
     def mean_absolute_percentage(self):
         """Calculate the mean absolute percentage error between the true
@@ -391,14 +401,14 @@ class Results:
         https://scikit-learn.org/stable/modules/generated/
         sklearn.metrics.mean_absolute_percentage_error
         """
-        error_name = "Mean Absolute Percentage Error"
-        for method, combo in self.combos.items():
-            for name, pred, true in combo:
-                if len(self._errors[name]["Variable"]) == len(self._errors[name][method]):
-                    self._errors[name]["Variable"].append(error_name)
-                self._errors[name][method].append(
-                    met.mean_absolute_percentage_error(true, pred)
-                )
+        for dset_key, dset in self._datasets.items():
+            for var in dset['x'].columns:
+                self._errors[dset_key].loc[
+                        "Mean Absolute Percentage Error", var
+                        ] = met.mean_absolute_percentage_error(
+                                dset['y'].loc[:, 'y'],
+                                dset['x'].loc[:, var]
+                                )
 
     def r2(self):
         """Calculate the r2 between the true values (y)
@@ -408,12 +418,14 @@ class Results:
         https://scikit-learn.org/stable/modules/generated/
         sklearn.metrics.r2_score
         """
-        error_name = "r2"
-        for method, combo in self.combos.items():
-            for name, pred, true in combo:
-                if len(self._errors[name]["Variable"]) == len(self._errors[name][method]):
-                    self._errors[name]["Variable"].append(error_name)
-                self._errors[name][method].append(met.r2_score(true, pred))
+        for dset_key, dset in self._datasets.items():
+            for var in dset['x'].columns:
+                self._errors[dset_key].loc[
+                        "r2", var
+                        ] = met.r2_score(
+                                dset['y'].loc[:, 'y'],
+                                dset['x'].loc[:, var]
+                                )
 
     def mean_poisson_deviance(self):
         """Calculate the mean poisson deviance between the true values (y)
@@ -423,12 +435,14 @@ class Results:
         https://scikit-learn.org/stable/modules/generated/
         sklearn.metrics.mean_poisson_deviance
         """
-        error_name = "Mean Poisson Deviance"
-        for method, combo in self.combos.items():
-            for name, pred, true in combo:
-                if len(self._errors[name]["Variable"]) == len(self._errors[name][method]):
-                    self._errors[name]["Variable"].append(error_name)
-                self._errors[name][method].append(met.mean_poisson_deviance(true, pred))
+        for dset_key, dset in self._datasets.items():
+            for var in dset['x'].columns:
+                self._errors[dset_key].loc[
+                        "Mean Poisson Deviance", var
+                        ] = met.mean_poisson_deviance(
+                                dset['y'].loc[:, 'y'],
+                                dset['x'].loc[:, var]
+                                )
 
     def mean_gamma_deviance(self):
         """Calculate the mean gamma deviance between the true values (y)
@@ -438,12 +452,14 @@ class Results:
         https://scikit-learn.org/stable/modules/generated/
         sklearn.metrics.mean_gamma_deviance
         """
-        error_name = "Mean Gamma Deviance"
-        for method, combo in self.combos.items():
-            for name, pred, true in combo:
-                if len(self._errors[name]["Variable"]) == len(self._errors[name][method]):
-                    self._errors[name]["Variable"].append(error_name)
-                self._errors[name][method].append(met.mean_gamma_deviance(true, pred))
+        for dset_key, dset in self._datasets.items():
+            for var in dset['x'].columns:
+                self._errors[dset_key].loc[
+                        "Mean Gamma Deviance", var
+                        ] = met.mean_gamma_deviance(
+                                dset['y'].loc[:, 'y'],
+                                dset['x'].loc[:, var]
+                                )
 
     def mean_tweedie_deviance(self):
         """Calculate the mean tweedie deviance between the true values (y)
@@ -453,13 +469,14 @@ class Results:
         https://scikit-learn.org/stable/modules/generated/
         sklearn.metrics.mean_tweedie_deviance
         """
-        error_name = "Mean Tweedie Deviance"
-        for method, combo in self.combos.items():
-
-            for name, pred, true in combo:
-                if len(self._errors[name]["Variable"]) == len(self._errors[name][method]):
-                    self._errors[name]["Variable"].append(error_name)
-                self._errors[name][method].append(met.mean_tweedie_deviance(true, pred))
+        for dset_key, dset in self._datasets.items():
+            for var in dset['x'].columns:
+                self._errors[dset_key].loc[
+                        "Mean Tweedie Deviance", var
+                        ] = met.mean_tweedie_deviance(
+                                dset['y'].loc[:, 'y'],
+                                dset['x'].loc[:, var]
+                                )
 
     def mean_pinball_loss(self):
         """Calculate the mean pinball loss between the true values (y)
@@ -469,21 +486,15 @@ class Results:
         https://scikit-learn.org/stable/modules/generated/
         sklearn.metrics.mean_pinball_loss
         """
-        error_name = "Mean Pinball Deviance"
-        for method, combo in self.combos.items():
-            for name, pred, true in combo:
-                if len(self._errors[name]["Variable"]) == len(self._errors[name][method]):
-                    self._errors[name]["Variable"].append(error_name)
-                self._errors[name][method].append(met.mean_pinball_loss(true, pred))
+        for dset_key, dset in self._datasets.items():
+            for var in dset['x'].columns:
+                self._errors[dset_key].loc[
+                        "Mean Pinball Deviance", var
+                        ] = met.mean_pinball_loss(
+                                dset['y'].loc[:, 'y'],
+                                dset['x'].loc[:, var]
+                                )
 
-    def return_errors(self):
+    def return_errors(self) -> dict[str, pd.DataFrame]:
         """Returns all calculated errors in dataframe format"""
-        for key, item in self._errors.items():
-            if not isinstance(self._errors[key], pd.DataFrame):
-                self._errors[key] = pd.DataFrame(data=dict(item))
-            if "Variable" in self._errors[key].columns:
-                self._errors[key] = self._errors[key].set_index("Variable")
-            self._errors[key] = self._errors[key].T
-        self._errors = dict(self._errors)
-        return self._errors
-
+        return dict(self._errors)

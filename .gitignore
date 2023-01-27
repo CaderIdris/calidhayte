@@ -6,3 +6,4 @@
 .mypy_cache/
 .tox/
 .coverage
+report.html
