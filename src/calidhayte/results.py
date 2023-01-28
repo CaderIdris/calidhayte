@@ -274,12 +274,15 @@ class Results:
         for uncal_key in uncal_sets:
             selected_datasets[str(uncal_key)] = datasets[uncal_key]
         if pymc_bool:
-            min_max_sets = filter(
-                    lambda x: bool(re.search(r'^Minimum|^Maximum', x)),
-                    datasets_to_use
+            min_max_sets = list(
+
+                    filter(
+                        lambda x: bool(re.search(r'^Minimum|^Maximum', x)),
+                        datasets_to_use
                     )
+                )
             for cal_key in cal_sets:
-                for pymc_subset in ['Mean'] + list(min_max_sets):
+                for pymc_subset in ['Mean'] + min_max_sets:
                     selected_datasets[
                             f'{cal_key} ({pymc_subset})'
                             ] = datasets[f'{cal_key} ({pymc_subset})']
@@ -300,7 +303,7 @@ class Results:
         for dset_key, dset in self._datasets.items():
             for var in dset['x'].columns:
                 self._errors[dset_key].loc[
-                        "Explained Variance Score", var
+                        var, "Explained Variance Score"
                         ] = met.explained_variance_score(
                                 dset['y'].loc[:, 'y'],
                                 dset['x'].loc[:, var]
@@ -317,7 +320,7 @@ class Results:
         for dset_key, dset in self._datasets.items():
             for var in dset['x'].columns:
                 self._errors[dset_key].loc[
-                        "Max Error", var
+                        var, "Max Error"
                         ] = met.max_error(
                                 dset['y'].loc[:, 'y'],
                                 dset['x'].loc[:, var]
@@ -334,7 +337,7 @@ class Results:
         for dset_key, dset in self._datasets.items():
             for var in dset['x'].columns:
                 self._errors[dset_key].loc[
-                        "Mean Absolute Error", var
+                        var, "Mean Absolute Error"
                         ] = met.mean_absolute_error(
                                 dset['y'].loc[:, 'y'],
                                 dset['x'].loc[:, var]
@@ -351,7 +354,7 @@ class Results:
         for dset_key, dset in self._datasets.items():
             for var in dset['x'].columns:
                 self._errors[dset_key].loc[
-                        "Root Mean Squared Error", var
+                        var, "Root Mean Squared Error"
                         ] = met.mean_squared_error(
                                 dset['y'].loc[:, 'y'],
                                 dset['x'].loc[:, var],
@@ -369,7 +372,7 @@ class Results:
         for dset_key, dset in self._datasets.items():
             for var in dset['x'].columns:
                 self._errors[dset_key].loc[
-                        "Root Mean Squared Log Error", var
+                        var, "Root Mean Squared Log Error"
                         ] = met.mean_squared_log_error(
                                 dset['y'].loc[:, 'y'],
                                 dset['x'].loc[:, var],
@@ -387,7 +390,7 @@ class Results:
         for dset_key, dset in self._datasets.items():
             for var in dset['x'].columns:
                 self._errors[dset_key].loc[
-                        "Median Absolute Error", var
+                        var, "Median Absolute Error"
                         ] = met.median_absolute_error(
                                 dset['y'].loc[:, 'y'],
                                 dset['x'].loc[:, var]
@@ -404,7 +407,7 @@ class Results:
         for dset_key, dset in self._datasets.items():
             for var in dset['x'].columns:
                 self._errors[dset_key].loc[
-                        "Mean Absolute Percentage Error", var
+                        var, "Mean Absolute Percentage Error"
                         ] = met.mean_absolute_percentage_error(
                                 dset['y'].loc[:, 'y'],
                                 dset['x'].loc[:, var]
@@ -421,7 +424,7 @@ class Results:
         for dset_key, dset in self._datasets.items():
             for var in dset['x'].columns:
                 self._errors[dset_key].loc[
-                        "r2", var
+                        var, "r2"
                         ] = met.r2_score(
                                 dset['y'].loc[:, 'y'],
                                 dset['x'].loc[:, var]
@@ -438,7 +441,7 @@ class Results:
         for dset_key, dset in self._datasets.items():
             for var in dset['x'].columns:
                 self._errors[dset_key].loc[
-                        "Mean Poisson Deviance", var
+                        var, "Mean Poisson Deviance"
                         ] = met.mean_poisson_deviance(
                                 dset['y'].loc[:, 'y'],
                                 dset['x'].loc[:, var]
@@ -455,7 +458,7 @@ class Results:
         for dset_key, dset in self._datasets.items():
             for var in dset['x'].columns:
                 self._errors[dset_key].loc[
-                        "Mean Gamma Deviance", var
+                        var, "Mean Gamma Deviance"
                         ] = met.mean_gamma_deviance(
                                 dset['y'].loc[:, 'y'],
                                 dset['x'].loc[:, var]
@@ -472,7 +475,7 @@ class Results:
         for dset_key, dset in self._datasets.items():
             for var in dset['x'].columns:
                 self._errors[dset_key].loc[
-                        "Mean Tweedie Deviance", var
+                        var, "Mean Tweedie Deviance"
                         ] = met.mean_tweedie_deviance(
                                 dset['y'].loc[:, 'y'],
                                 dset['x'].loc[:, var]
@@ -489,7 +492,7 @@ class Results:
         for dset_key, dset in self._datasets.items():
             for var in dset['x'].columns:
                 self._errors[dset_key].loc[
-                        "Mean Pinball Deviance", var
+                        var, "Mean Pinball Deviance"
                         ] = met.mean_pinball_loss(
                                 dset['y'].loc[:, 'y'],
                                 dset['x'].loc[:, var]

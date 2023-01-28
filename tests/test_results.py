@@ -121,11 +121,13 @@ def test_prepare_datasets(
         cal_keys = filter(
                 lambda x: bool(re.search(r'^Calibrated', x)), test_sets
                 )
-        min_max_keys = filter(
+        min_max_keys = list(
+            filter(
                 lambda x: bool(re.search(r'^Minimum|^Maximum', x)), test_sets
                 )
+            )
         for cal_key in cal_keys:
-            for pymc_subset in ['Mean'] + list(min_max_keys):
+            for pymc_subset in ['Mean'] + min_max_keys:
                 expected_keys.append(f'{cal_key} ({pymc_subset})')
 
     res = Results(
@@ -198,18 +200,22 @@ def test_result_calcs(
     """
     Tests whether all datasets are selected properly
     """
-    error_tests = filter(
-            bool,
-            [
-                evs,
-                max,
-                mabs,
-                rms,
-                medabs,
-                map,
-                r2,
-                ]
+    tests = dict()
+    error_tests = list(
+            filter(
+                bool,
+                [
+                    evs,
+                    max,
+                    mabs,
+                    rms,
+                    medabs,
+                    map,
+                    r2,
+                    ]
+                )
             )
+    expected_num_of_cols = len(error_tests)
     if dset == "skl":
         data = full_data_skl
     else:
@@ -241,4 +247,20 @@ def test_result_calcs(
                       ):
             rmsl(res)
 
-    res.return_errors()
+    errors = res.return_errors()
+    if not error_tests:
+        expected_num_of_dfs = 0
+    elif dset == "skl":
+        expected_num_of_dfs = 6
+    else:
+        expected_num_of_dfs = 12
+    tests['Correct number of dfs'] = len(errors.keys()) == expected_num_of_dfs
+
+    for df_name, df in errors.items():
+        print(df_name)
+        tests[f'Correct num of cols ({df_name})'] = (
+                df.shape[1] == expected_num_of_cols
+                )
+        tests[f'Correct num of rows ({df_name})'] = df.shape[0] == 1
+
+    assert all(tests.values())
