@@ -8,12 +8,13 @@ import numpy as np
 import pandas as pd
 
 from .calibrate import Calibrate
+from .prepare import prepare_datasets
 
 mpl.use("pgf")  # Used to make pgf files for latex
 plt.rcParams.update({"figure.max_open_warning": 0})
 
 
-class Results:
+class Graphs:
     """Calculates errors between "true" and "predicted" measurements, plots
     graphs and returns all results
 
@@ -97,166 +98,19 @@ class Results:
                 )
         self.y_subsets = self._cal.return_measurements()
         self.y_full = self._cal.join_measurements()
-        self._datasets = self._prepare_datasets(datasets_to_use)
+        self._datasets = prepare_datasets(
+                datasets_to_use,
+                self.train,
+                self.test,
+                self.y_full,
+                self.y_subsets
+                )
 
         self.style = style
         self.x_name = x_name
         self.y_name = y_name
 
         self._plots: dict[str, dict[str, dict[str, mpl.figure]]] = dict()
-
-    def _prepare_datasets(
-            self,
-            datasets_to_use: list[
-                Literal[
-                    "Calibrated Train",
-                    "Calibrated Test",
-                    "Calibrated Full",
-                    "Uncalibrated Train",
-                    "Uncalibrated Test",
-                    "Uncalibrated Full",
-                    "Minimum",
-                    "Maximum"
-                    ]
-                ]
-            ) -> dict[str, dict[str, pd.DataFrame]]:
-        """
-        Prepare the datasets to be analysed
-
-        Parameters
-        ----------
-        datasets_to_use : list[str]
-            List containing datasets to use
-            Datasets are as follows:
-                - Calibrated Train
-                    predicted y measurements from training set using
-                    coefficients
-                - Calibrated Test
-                    predicted y measurements from testing set using
-                    coefficients
-                - Calibrated Full
-                    predicted y measurements from both sets using
-                    coefficients
-                - Uncalibrated Train
-                    Base x measurements from training set
-                - Uncalibrated Test
-                    Base x measurements from testing set
-                - Uncalibrated Full
-                    Base x measurements from testing set
-                - Minimum
-                    Mean bayesian coefficients - 2 times standard deviation
-                - Maximum
-                    Mean bayesian coefficients + 2 times standard deviation
-        Returns
-        -------
-        dict[str, dict[str, pd.DataFrame]]
-            Contains all subsets of the data to be analysed
-        """
-        uncalibrated_datasets = {
-                "Uncalibrated Train": {
-                    "x": self.train.loc[:, ['x']],
-                    "y": self.train.loc[:, ['y']]
-                    },
-                "Uncalibrated Test": {
-                    "x": self.test.loc[:, ['x']],
-                    "y": self.test.loc[:, ['y']]
-                    },
-                "Uncalibrated Full": {
-                    "x": self.y_full['Uncalibrated'].loc[:, ['x']],
-                    "y": self.y_full['Uncalibrated'].loc[:, ['y']]
-                    }
-                }
-        pymc_bool = all(
-                [
-                    any(["Mean." in key for key in self.y_subsets.keys()]),
-                    any(["Minimum." in key for key in self.y_subsets.keys()]),
-                    any(["Maximum." in key for key in self.y_subsets.keys()])
-                    ]
-                )
-        if pymc_bool:
-            cal_datasets = {
-                    "Calibrated Train (Mean)": {
-                        "x": self.y_subsets['Mean.Train'],
-                        "y": self.train.loc[:, ['y']]
-                        },
-                    "Calibrated Test (Mean)": {
-                        "x": self.y_subsets['Mean.Test'],
-                        "y": self.test.loc[:, ['y']]
-                        },
-                    "Calibrated Full (Mean)": {
-                        "x": self.y_full['Mean.Calibrated'],
-                        "y": self.y_full['Uncalibrated'].loc[:, ['y']]
-                        },
-                    "Calibrated Train (Minimum)": {
-                        "x": self.y_subsets['Minimum.Train'],
-                        "y": self.train.loc[:, ['y']]
-                        },
-                    "Calibrated Test (Minimum)": {
-                        "x": self.y_subsets['Minimum.Test'],
-                        "y": self.test.loc[:, ['y']]
-                        },
-                    "Calibrated Full (Minimum)": {
-                        "x": self.y_full['Minimum.Calibrated'],
-                        "y": self.y_full['Uncalibrated'].loc[:, ['y']]
-                        },
-                    "Calibrated Train (Maximum)": {
-                        "x": self.y_subsets['Maximum.Train'],
-                        "y": self.train.loc[:, ['y']]
-                        },
-                    "Calibrated Test (Maximum)": {
-                        "x": self.y_subsets['Maximum.Test'],
-                        "y": self.test.loc[:, ['y']]
-                        },
-                    "Calibrated Full (Maximum)": {
-                        "x": self.y_full['Maximum.Calibrated'],
-                        "y": self.y_full['Uncalibrated'].loc[:, ['y']]
-                        },
-                    }
-        else:
-            cal_datasets = {
-                    "Calibrated Train": {
-                        "x": self.y_subsets['Train'],
-                        "y": self.train.loc[:, ['y']]
-                        },
-                    "Calibrated Test": {
-                        "x": self.y_subsets['Test'],
-                        "y": self.test.loc[:, ['y']]
-                        },
-                    "Calibrated Full": {
-                        "x": self.y_full['Calibrated'],
-                        "y": self.y_full['Uncalibrated'].loc[:, ['y']]
-                        }
-                    }
-        datasets = uncalibrated_datasets | cal_datasets
-        uncal_sets = filter(
-                lambda x: bool(re.search(r'^Uncalibrated ', x)),
-                datasets_to_use
-                )
-        cal_sets = filter(
-                lambda x: bool(re.search(r'^Calibrated ', x)),
-                datasets_to_use
-                )
-        selected_datasets = dict()
-        for uncal_key in uncal_sets:
-            selected_datasets[str(uncal_key)] = datasets[uncal_key]
-        if pymc_bool:
-            min_max_sets = list(
-
-                    filter(
-                        lambda x: bool(re.search(r'^Minimum|^Maximum', x)),
-                        datasets_to_use
-                    )
-                )
-            for cal_key in cal_sets:
-                for pymc_subset in ['Mean'] + min_max_sets:
-                    selected_datasets[
-                            f'{cal_key} ({pymc_subset})'
-                            ] = datasets[f'{cal_key} ({pymc_subset})']
-        else:
-            for cal_key in cal_sets:
-                selected_datasets[str(cal_key)] = datasets[cal_key]
-
-        return selected_datasets
 
     def linear_reg_plot(self, title: Optional[str] = None):
         for dset_key, dset in self._datasets.items():
@@ -317,7 +171,7 @@ class Results:
                         (
                             0,
                             self.coefficients.loc[var]["i.intercept"]
-                            + 2 * self.coefficients.loc[var]["sd.Intercept"],
+                            + 2 * self.coefficients.loc[var]["sd.intercept"],
                         ),
                         slope=(
                             self.coefficients.loc[var]["coeff.x"]
@@ -400,9 +254,12 @@ class Results:
                     self._plots[dset_key][var] = dict()
                 plt.style.use(self.style)
                 fig, ax = plt.subplots(figsize=(8, 8))
-                x_data = dset['x'].loc[:, var].join(dset['y'].loc['y']).mean()
+                x_data = dset['x'].loc[:, [var]].join(
+                        dset['y'].loc[:, 'y'],
+                        how="inner"
+                        ).mean(axis=1)
                 y_data = dset['x'].loc[:, var] - dset['y'].loc[:, 'y']
-                y_mean = np.mean(y_data)
+                y_mean = y_data.mean()
                 y_sd = 1.96 * np.std(y_data)
 
                 max_diff_from_mean = max(
@@ -501,16 +358,16 @@ class Results:
                 plt.style.use(self.style)
                 x_vals = dset['x'].loc[:, var]
                 y_vals = dset['y'].loc[:, 'y']
-                dates_x = x_vals.index
-                dates_y = y_vals.index
+                dates_x = x_vals.index.tolist()
+                dates_y = y_vals.index.tolist()
                 fig, ax = plt.subplots(figsize=(16, 8))
                 ax.plot(dates_y, y_vals, label=self.y_name)
                 ax.plot(dates_x, x_vals, label=self.x_name)
-                x_null = x_vals.isnull()
-                y_null = y_vals.isnull()
-                combined_dates = (x_null and y_null)
-                first_datetime = x_vals.loc[combined_dates].index[0]
-                last_datetime = x_vals.loc[combined_dates].index[-1]
+                x_null = x_vals.notna()
+                y_null = y_vals.notna()
+                combined_dates = np.logical_and(x_null, y_null)
+                first_datetime = x_vals.loc[combined_dates].index.tolist()[0]
+                last_datetime = x_vals.loc[combined_dates].index.tolist()[-1]
                 ax.legend()
                 ax.set_xlim(first_datetime, last_datetime)
                 ax.set_xlabel("Datetime")
