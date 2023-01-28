@@ -15,42 +15,55 @@ plt.rcParams.update({"figure.max_open_warning": 0})
 
 
 class Graphs:
-    """Calculates errors between "true" and "predicted" measurements, plots
-    graphs and returns all results
+    """
+    Calculates errors between "true" and "predicted" measurements, plots graphs
+    and returns all results
 
-    Attributes:
-        train (DataFrame): Training data
+    ```
 
-        test (DataFrame): Testing data
-
-        coefficients (DataFrame): Calibration coefficients
-
-        y_dset['x'].loc[:, var] (dict): Calibrated x measurements
-
-        _plots (dict): All result plots made
-
-        x_name (str): Name of x device
-
-        y_name (str): Name of y device
+    Attributes
+    ----------
+        train : pd.DataFrame
+            Training data
+        test : pd.DataFrame
+            Testing data
+        coefficients : pd.DataFrame
+            Calibration coefficients
+        _cal : Calibration
+            Calibrated measurements
+        y_subsets : dict[str, dict[str, pd.DataFrame]]
+            Subsets of measurements (e.g Calibrated Train, Uncalibrated Test)
+        y_full : dict[str, dict[str, pd.DataFrame]]
+            Full measurements, calibrated and uncalibrated
+        _datasets : dict[str, dict[str, pd.DataFrame]]
+            Datasets to plot
+        style : str
+            Style to use for matplotlib, can either be inbuilt style or path to
+            style file
+        x_name : str
+            Name of x device
+        y_name : str
+            Name of y device
+        _plots : dict[str, dict[str, dict[str, mpl.figure]]]
+            All plots, split by dataset and then variable
 
     Methods:
-        bland_altman_plot: Plots a bland altman graph for all variable
-        combinations for all specified datasets using predicted (calibrated x)
-        and true (y) data
-
-        linear_reg_plot: Plots a linear regression graph for calibrations that
-        only have an x coefficients for all specified datasets using predited
-        (calibrated x) and true (y) data
-
-        ecdf_plot: Plots an eCDF graph for all variable combinations for all
-        specified dataset using predicted (calibrated x) and true (y) data
-
-        temp_time_series_plot: Temporary way to plot time series, not great
-
-        save_results: Saves errors and coefficients for specific variable and
-        dataset to local sqlite3 file
-
-        save_plots: Saves all plots in pgf format
+        linear_reg_plot(title=None)
+            Plots a linear regression graph for calibrations that
+            only have an x coefficients for all specified datasets using
+            predicted (calibrated x) and true (y) data
+        bland_altman_plot(title=None)
+            Plots a bland altman graph for all variable
+            combinations for all specified datasets using predicted
+            (calibrated x) and true (y) data
+        ecdf_plot(title=None)
+            Plots an eCDF graph for all variable combinations for all
+            specified dataset using predicted (calibrated x) and true (y) data
+        time_series_plot(title=None)
+            Plots a time series graph using predicted (calibrated x) and true
+            (y) data
+        save_plots(title=None, format='pgf')
+            Saves all plots in specified format
     """
 
     def __init__(
@@ -77,16 +90,29 @@ class Graphs:
         x_name: Optional[str] = None,
         y_name: Optional[str] = None
     ):
-        """Initialise the class
+        """
+        Initialise the class
 
-        Keyword Arguments:
-            train (DataFrame): Training data
-
-            test (DataFrame): Testing data
-
-            coefficients (DataFrame): Calibration coefficients
-
-            comparison_name (String): Name of the comparison
+        Parameters
+        ----------
+            train : pd.DataFrame)
+                Training data
+            test : pd.DataFrame
+                Testing data
+            coefficients : pd.DataFrame
+                Calibration coefficients
+            datasets_to_use : list[str], optional
+                Datasets to plot measurements
+            style : str, optional
+                Matplotlib style to use. Can be inbuilt style or path to style
+                file
+                (Default is bmh)
+            x_name : str, optional
+                Name of x device
+                (Default is None)
+            y_name : str, optional
+                Name of y device
+                (Default is None)
         """
         self.train = train
         self.test = test
@@ -113,6 +139,15 @@ class Graphs:
         self._plots: dict[str, dict[str, dict[str, mpl.figure]]] = dict()
 
     def linear_reg_plot(self, title: Optional[str] = None):
+        """
+        Plot a linear regression plot for all univariate calibrations
+
+        Parameters
+        ----------
+        title : str, optional
+            Title for plot
+            (Default is None)
+        """
         for dset_key, dset in self._datasets.items():
             if dset_key not in self._plots.keys():
                 self._plots[dset_key] = dict()
@@ -246,6 +281,15 @@ class Graphs:
                 self._plots[dset_key][var]['Linear Regression'] = fig
 
     def bland_altman_plot(self, title: Optional[str] = None):
+        """
+        Plot a bland altman plot for all calibrations
+
+        Parameters
+        ----------
+        title : str, optional
+            Title for plot
+            (Default is None)
+        """
         for dset_key, dset in self._datasets.items():
             if dset_key not in self._plots.keys():
                 self._plots[dset_key] = dict()
@@ -312,7 +356,16 @@ class Graphs:
 
                 self._plots[dset_key][var]['Bland Altman'] = fig
 
-    def ecdf_plot(self, title=None):
+    def ecdf_plot(self, title: Optional[str] = None):
+        """
+        Plot a bland altman plot for all calibrations
+
+        Parameters
+        ----------
+        title : str, optional
+            Title for plot
+            (Default is None)
+        """
         for dset_key, dset in self._datasets.items():
             if dset_key not in self._plots.keys():
                 self._plots[dset_key] = dict()
@@ -347,6 +400,15 @@ class Graphs:
                 self._plots[dset_key][var]['eCDF'] = fig
 
     def time_series_plot(self, title: Optional[str] = None):
+        """
+        Plot a time series plot for full datasets
+
+        Parameters
+        ----------
+        title : str, optional
+            Title for plot
+            (Default is None)
+        """
         for dset_key, dset in self._datasets.items():
             if not bool(re.search(r' Full', dset_key)):
                 continue
@@ -377,6 +439,16 @@ class Graphs:
                 self._plots[dset_key][var]['Time Series'] = fig
 
     def save_plots(self, path: str, format: str = "pgf"):
+        """
+        Save all plots in the specified format in the specified path
+
+        Parameters
+        ----------
+        path : str
+            Path to save the plots to
+        format : str, optional
+            Format to save the plots as
+        """
         for dset_key, dset_plots in self._plots.items():
             for var, plots in dset_plots.items():
                 for name, plot in plots.items():
@@ -386,7 +458,20 @@ class Graphs:
                     plt.close(plot)
 
 
-def ecdf(data):
+def ecdf(data: pd.Series):
+    """
+    Generate x and y data for ecdf plot
+
+    Parameters
+    ----------
+    data : pd.Series
+        1D array to created ecdf summary for
+
+    Returns
+    -------
+    data sorted in ascending order (x) and normalised index of sorted
+    measurement (y)
+    """
     x = np.sort(data)
     y = np.arange(1, len(data) + 1) / len(data)
     return x, y
