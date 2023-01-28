@@ -1,5 +1,16 @@
+from pathlib import Path
+import re
+from typing import Literal, Optional
+
+import matplotlib as mpl
 import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
+
+from .calibrate import Calibrate
+
+mpl.use("pgf")  # Used to make pgf files for latex
+plt.rcParams.update({"figure.max_open_warning": 0})
 
 
 class Results:
@@ -13,7 +24,7 @@ class Results:
 
         coefficients (DataFrame): Calibration coefficients
 
-        y_pred (dict): Calibrated x measurements
+        y_dset['x'].loc[:, var] (dict): Calibrated x measurements
 
         _plots (dict): All result plots made
 
@@ -43,11 +54,27 @@ class Results:
 
     def __init__(
         self,
-        train,
-        test,
-        coefficients,
-        x_name=None,
-        y_name=None,
+        train: pd.DataFrame,
+        test: pd.DataFrame,
+        coefficients: pd.DataFrame,
+        datasets_to_use: list[
+            Literal[
+                "Calibrated Train",
+                "Calibrated Test",
+                "Calibrated Full",
+                "Uncalibrated Train",
+                "Uncalibrated Test",
+                "Uncalibrated Full",
+                "Minimum",
+                "Maximum"
+                ]
+            ] = [
+            "Calibrated Test",
+            "Uncalibrated Test"
+        ],
+        style: str = "bmh",
+        x_name: Optional[str] = None,
+        y_name: Optional[str] = None
     ):
         """Initialise the class
 
@@ -63,22 +90,192 @@ class Results:
         self.train = train
         self.test = test
         self.coefficients = coefficients
-        self._errors = defaultdict(lambda: defaultdict(list))
-        self.y_pred = self._calibrate()
-        self.combos = self._get_all_combos()
-        self._plots = defaultdict(lambda: defaultdict(list))
+        self._cal = Calibrate(
+                self.train,
+                self.test,
+                self.coefficients
+                )
+        self.y_subsets = self._cal.return_measurements()
+        self.y_full = self._cal.join_measurements()
+        self._datasets = self._prepare_datasets(datasets_to_use)
+
+        self.style = style
         self.x_name = x_name
         self.y_name = y_name
-    def linear_reg_plot(self, title=None):
-        plot_name = "Linear Regression"
-        for method, combo in self.combos.items():
-            for name, pred, true in combo:
-                if len(self._plots[name]["Plot"]) == len(self._plots[name][method]):
-                    self._plots[name]["Plot"].append(plot_name)
-                if method != "x":
-                    self._plots[name][method].append(None)
+
+        self._plots: dict[str, dict[str, dict[str, mpl.figure]]] = dict()
+
+    def _prepare_datasets(
+            self,
+            datasets_to_use: list[
+                Literal[
+                    "Calibrated Train",
+                    "Calibrated Test",
+                    "Calibrated Full",
+                    "Uncalibrated Train",
+                    "Uncalibrated Test",
+                    "Uncalibrated Full",
+                    "Minimum",
+                    "Maximum"
+                    ]
+                ]
+            ) -> dict[str, dict[str, pd.DataFrame]]:
+        """
+        Prepare the datasets to be analysed
+
+        Parameters
+        ----------
+        datasets_to_use : list[str]
+            List containing datasets to use
+            Datasets are as follows:
+                - Calibrated Train
+                    predicted y measurements from training set using
+                    coefficients
+                - Calibrated Test
+                    predicted y measurements from testing set using
+                    coefficients
+                - Calibrated Full
+                    predicted y measurements from both sets using
+                    coefficients
+                - Uncalibrated Train
+                    Base x measurements from training set
+                - Uncalibrated Test
+                    Base x measurements from testing set
+                - Uncalibrated Full
+                    Base x measurements from testing set
+                - Minimum
+                    Mean bayesian coefficients - 2 times standard deviation
+                - Maximum
+                    Mean bayesian coefficients + 2 times standard deviation
+        Returns
+        -------
+        dict[str, dict[str, pd.DataFrame]]
+            Contains all subsets of the data to be analysed
+        """
+        uncalibrated_datasets = {
+                "Uncalibrated Train": {
+                    "x": self.train.loc[:, ['x']],
+                    "y": self.train.loc[:, ['y']]
+                    },
+                "Uncalibrated Test": {
+                    "x": self.test.loc[:, ['x']],
+                    "y": self.test.loc[:, ['y']]
+                    },
+                "Uncalibrated Full": {
+                    "x": self.y_full['Uncalibrated'].loc[:, ['x']],
+                    "y": self.y_full['Uncalibrated'].loc[:, ['y']]
+                    }
+                }
+        pymc_bool = all(
+                [
+                    any(["Mean." in key for key in self.y_subsets.keys()]),
+                    any(["Minimum." in key for key in self.y_subsets.keys()]),
+                    any(["Maximum." in key for key in self.y_subsets.keys()])
+                    ]
+                )
+        if pymc_bool:
+            cal_datasets = {
+                    "Calibrated Train (Mean)": {
+                        "x": self.y_subsets['Mean.Train'],
+                        "y": self.train.loc[:, ['y']]
+                        },
+                    "Calibrated Test (Mean)": {
+                        "x": self.y_subsets['Mean.Test'],
+                        "y": self.test.loc[:, ['y']]
+                        },
+                    "Calibrated Full (Mean)": {
+                        "x": self.y_full['Mean.Calibrated'],
+                        "y": self.y_full['Uncalibrated'].loc[:, ['y']]
+                        },
+                    "Calibrated Train (Minimum)": {
+                        "x": self.y_subsets['Minimum.Train'],
+                        "y": self.train.loc[:, ['y']]
+                        },
+                    "Calibrated Test (Minimum)": {
+                        "x": self.y_subsets['Minimum.Test'],
+                        "y": self.test.loc[:, ['y']]
+                        },
+                    "Calibrated Full (Minimum)": {
+                        "x": self.y_full['Minimum.Calibrated'],
+                        "y": self.y_full['Uncalibrated'].loc[:, ['y']]
+                        },
+                    "Calibrated Train (Maximum)": {
+                        "x": self.y_subsets['Maximum.Train'],
+                        "y": self.train.loc[:, ['y']]
+                        },
+                    "Calibrated Test (Maximum)": {
+                        "x": self.y_subsets['Maximum.Test'],
+                        "y": self.test.loc[:, ['y']]
+                        },
+                    "Calibrated Full (Maximum)": {
+                        "x": self.y_full['Maximum.Calibrated'],
+                        "y": self.y_full['Uncalibrated'].loc[:, ['y']]
+                        },
+                    }
+        else:
+            cal_datasets = {
+                    "Calibrated Train": {
+                        "x": self.y_subsets['Train'],
+                        "y": self.train.loc[:, ['y']]
+                        },
+                    "Calibrated Test": {
+                        "x": self.y_subsets['Test'],
+                        "y": self.test.loc[:, ['y']]
+                        },
+                    "Calibrated Full": {
+                        "x": self.y_full['Calibrated'],
+                        "y": self.y_full['Uncalibrated'].loc[:, ['y']]
+                        }
+                    }
+        datasets = uncalibrated_datasets | cal_datasets
+        uncal_sets = filter(
+                lambda x: bool(re.search(r'^Uncalibrated ', x)),
+                datasets_to_use
+                )
+        cal_sets = filter(
+                lambda x: bool(re.search(r'^Calibrated ', x)),
+                datasets_to_use
+                )
+        selected_datasets = dict()
+        for uncal_key in uncal_sets:
+            selected_datasets[str(uncal_key)] = datasets[uncal_key]
+        if pymc_bool:
+            min_max_sets = list(
+
+                    filter(
+                        lambda x: bool(re.search(r'^Minimum|^Maximum', x)),
+                        datasets_to_use
+                    )
+                )
+            for cal_key in cal_sets:
+                for pymc_subset in ['Mean'] + min_max_sets:
+                    selected_datasets[
+                            f'{cal_key} ({pymc_subset})'
+                            ] = datasets[f'{cal_key} ({pymc_subset})']
+        else:
+            for cal_key in cal_sets:
+                selected_datasets[str(cal_key)] = datasets[cal_key]
+
+        return selected_datasets
+
+    def linear_reg_plot(self, title: Optional[str] = None):
+        for dset_key, dset in self._datasets.items():
+            if dset_key not in self._plots.keys():
+                self._plots[dset_key] = dict()
+            for var in dset['x'].columns:
+                number_of_coeffs = self.coefficients.loc[var, :].notna().sum()
+                pymc_bool = self.coefficients.filter(
+                        regex=r'^sd\.', axis=1
+                        ).shape[1]
+                if (
+                        (pymc_bool and number_of_coeffs != 4)
+                        or
+                        (not pymc_bool and number_of_coeffs != 2)
+                        ):
                     continue
-                plt.style.use("Settings/style.mplstyle")
+                if var not in self._plots[dset_key].keys():
+                    self._plots[dset_key][var] = dict()
+                plt.style.use(self.style)
                 fig = plt.figure(figsize=(8, 8))
                 fig_gs = fig.add_gridspec(
                     2,
@@ -99,123 +296,127 @@ class Results:
                 histy_ax = fig.add_subplot(fig_gs[1, 1], sharey=scatter_ax)
                 histy_ax.axis("off")
 
-                max_value = max(max(true), max(pred))
+                max_value = max(
+                        max(dset['y'].loc[:, 'y']),
+                        max(dset['x'].loc[:, var])
+                        )
                 scatter_ax.set_xlim(0, max_value)
                 scatter_ax.set_ylim(0, max_value)
-                scatter_ax.set_xlabel(f"{self.x_name} ({method})")
+                scatter_ax.set_xlabel(f"{self.x_name} (x)")
                 scatter_ax.set_ylabel(f"{self.y_name}")
-                scatter_ax.scatter(pred, true, color="C0", alpha=0.75)
-                number_of_coeffs = np.count_nonzero(
-                    ~np.isnan(self.coefficients.loc[method].values)
-                )
-                if (
-                    bool(re.search("Mean", name))
-                    and not bool(re.search("Uncalibrated", name))
-                    and number_of_coeffs == 4
-                ):
+                scatter_ax.scatter(
+                        dset['x'].loc[:, var],
+                        dset['y'].loc[:, 'y'],
+                        alpha=0.75)
+                if bool(re.search(r' \(Mean\)$', dset_key)):
                     scatter_ax.axline(
-                        (0, self.coefficients.loc[method]["i.Intercept"]),
-                        slope=self.coefficients.loc[method]["coeff.x"],
-                        color="xkcd:vermillion",
+                        (0, self.coefficients.loc[var]["i.intercept"]),
+                        slope=self.coefficients.loc[var]["coeff.x"]
                     )
                     scatter_ax.axline(
                         (
                             0,
-                            self.coefficients.loc[method]["i.Intercept"]
-                            + 2 * self.coefficients.loc[method]["sd.Intercept"],
+                            self.coefficients.loc[var]["i.intercept"]
+                            + 2 * self.coefficients.loc[var]["sd.Intercept"],
                         ),
                         slope=(
-                            self.coefficients.loc[method]["coeff.x"]
-                            + 2 * self.coefficients.loc[method]["sd.x"]
+                            self.coefficients.loc[var]["coeff.x"]
+                            + 2 * self.coefficients.loc[var]["sd.x"]
                         ),
                         color="xkcd:fresh green",
                     )
                     scatter_ax.axline(
                         (
                             0,
-                            self.coefficients.loc[method]["i.Intercept"]
-                            - 2 * self.coefficients.loc[method]["sd.Intercept"],
+                            self.coefficients.loc[var]["i.intercept"]
+                            - 2 * self.coefficients.loc[var]["sd.intercept"],
                         ),
                         slope=(
-                            self.coefficients.loc[method]["coeff.x"]
-                            - 2 * self.coefficients.loc[method]["sd.x"]
+                            self.coefficients.loc[var]["coeff.x"]
+                            - 2 * self.coefficients.loc[var]["sd.x"]
                         ),
                         color="xkcd:fresh green",
                     )
-                elif (
-                    bool(re.search("Min", name))
-                    and not bool(re.search("Uncalibrated", name))
-                    and number_of_coeffs == 4
-                ):
+                elif bool(re.search(r' \(Minimum\)$', dset_key)):
                     scatter_ax.axline(
                         (
                             0,
-                            self.coefficients.loc[method]["i.Intercept"]
-                            - 2 * self.coefficients.loc[method]["sd.Intercept"],
+                            self.coefficients.loc[var]["i.intercept"]
+                            - 2 * self.coefficients.loc[var]["sd.intercept"],
                         ),
                         slope=(
-                            self.coefficients.loc[method]["coeff.x"]
-                            - 2 * self.coefficients.loc[method]["sd.x"]
+                            self.coefficients.loc[var]["coeff.x"]
+                            - 2 * self.coefficients.loc[var]["sd.x"]
                         ),
-                        color="xkcd:vermillion",
                     )
-                elif (
-                    bool(re.search("Max", name))
-                    and not bool(re.search("Uncalibrated", name))
-                    and number_of_coeffs == 4
-                ):
+                elif bool(re.search(r' \(Maximum\)$', dset_key)):
                     scatter_ax.axline(
                         (
                             0,
-                            self.coefficients.loc[method]["i.Intercept"]
-                            + 2 * self.coefficients.loc[method]["sd.Intercept"],
+                            self.coefficients.loc[var]["i.intercept"]
+                            + 2 * self.coefficients.loc[var]["sd.intercept"],
                         ),
                         slope=(
-                            self.coefficients.loc[method]["coeff.x"]
-                            + 2 * self.coefficients.loc[method]["sd.x"]
+                            self.coefficients.loc[var]["coeff.x"]
+                            + 2 * self.coefficients.loc[var]["sd.x"]
                         ),
-                        color="xkcd:vermillion",
                     )
-                elif (
-                    not bool(re.search("Uncalibrated", name)) and number_of_coeffs == 2
-                ):
+                elif not bool(re.search(r'^Uncalibrated', dset_key)):
                     scatter_ax.axline(
-                        (0, int(self.coefficients.loc[method]["i.Intercept"])),
-                        slope=self.coefficients.loc[method]["coeff.x"],
-                        color="xkcd:vermillion",
+                        (0, int(self.coefficients.loc[var]["i.intercept"])),
+                        slope=self.coefficients.loc[var]["coeff.x"],
                     )
 
                 binwidth = 2.5
-                xymax = max(np.max(np.abs(pred)), np.max(np.abs(true)))
+                xymax = max(
+                        np.max(np.abs(dset['x'].loc[:, var])),
+                        np.max(np.abs(dset['y'].loc[:, 'y']))
+                        )
                 lim = (int(xymax / binwidth) + 1) * binwidth
 
                 bins = np.arange(-lim, lim + binwidth, binwidth)
-                histx_ax.hist(pred, bins=bins, color="C0")
-                histy_ax.hist(true, bins=bins, orientation="horizontal", color="C0")
+                histx_ax.hist(
+                        dset['x'].loc[:, var],
+                        bins=bins,
+                        color="C0"
+                        )
+                histy_ax.hist(
+                        dset['y'].loc[:, 'y'],
+                        bins=bins,
+                        orientation="horizontal",
+                        color="C0"
+                        )
                 if isinstance(title, str):
-                    fig.suptitle(f"{title}\n{name} ({method})")
+                    fig.suptitle(f"{title}\n{dset_key} ({var})")
 
-                self._plots[name][method].append(fig)
+                self._plots[dset_key][var]['Linear Regression'] = fig
 
-    def bland_altman_plot(self, title=None):
-        plot_name = "Bland-Altman"
-        for method, combo in self.combos.items():
-            for name, pred, true in combo:
-                if len(self._plots[name]["Plot"]) == len(self._plots[name][method]):
-                    self._plots[name]["Plot"].append(plot_name)
-                plt.style.use("Settings/style.mplstyle")
+    def bland_altman_plot(self, title: Optional[str] = None):
+        for dset_key, dset in self._datasets.items():
+            if dset_key not in self._plots.keys():
+                self._plots[dset_key] = dict()
+            for var in dset['x'].columns:
+                if var not in self._plots[dset_key].keys():
+                    self._plots[dset_key][var] = dict()
+                plt.style.use(self.style)
                 fig, ax = plt.subplots(figsize=(8, 8))
-                x_data = np.mean(np.vstack((pred, true)).T, axis=1)
-                y_data = np.array(pred) - np.array(true)
+                x_data = dset['x'].loc[:, var].join(dset['y'].loc['y']).mean()
+                y_data = dset['x'].loc[:, var] - dset['y'].loc[:, 'y']
                 y_mean = np.mean(y_data)
                 y_sd = 1.96 * np.std(y_data)
+
                 max_diff_from_mean = max(
                     (y_data - y_mean).min(), (y_data - y_mean).max(), key=abs
                 )
+
                 text_adjust = (12 * max_diff_from_mean) / 300
-                ax.set_ylim(y_mean - max_diff_from_mean, y_mean + max_diff_from_mean)
+                ax.set_ylim(
+                        y_mean - max_diff_from_mean,
+                        y_mean + max_diff_from_mean
+                        )
                 ax.set_xlabel("Average of Measured and Reference")
                 ax.set_ylabel("Difference Between Measured and Reference")
+
                 ax.scatter(x_data, y_data, alpha=0.75)
                 ax.axline((0, y_mean), (1, y_mean), color="xkcd:vermillion")
                 ax.text(
@@ -226,7 +427,9 @@ class Results:
                     horizontalalignment="right",
                 )
                 ax.axline(
-                    (0, y_mean + y_sd), (1, y_mean + y_sd), color="xkcd:fresh green"
+                    (0, y_mean + y_sd),
+                    (1, y_mean + y_sd),
+                    color="xkcd:fresh green"
                 )
                 ax.text(
                     max(x_data),
@@ -236,7 +439,9 @@ class Results:
                     horizontalalignment="right",
                 )
                 ax.axline(
-                    (0, y_mean - y_sd), (1, y_mean - y_sd), color="xkcd:fresh green"
+                    (0, y_mean - y_sd),
+                    (1, y_mean - y_sd),
+                    color="xkcd:fresh green"
                 )
                 ax.text(
                     max(x_data),
@@ -246,24 +451,31 @@ class Results:
                     horizontalalignment="right",
                 )
                 if isinstance(title, str):
-                    fig.suptitle(f"{title}\n{name} ({method})")
+                    fig.suptitle(f"{title}\n{dset_key} ({var})")
 
-                self._plots[name][method].append(fig)
+                self._plots[dset_key][var]['Bland Altman'] = fig
 
     def ecdf_plot(self, title=None):
-        plot_name = "eCDF"
-        for method, combo in self.combos.items():
-            for name, pred, true in combo:
-                if len(self._plots[name]["Plot"]) == len(self._plots[name][method]):
-                    self._plots[name]["Plot"].append(plot_name)
-                plt.style.use("Settings/style.mplstyle")
+        for dset_key, dset in self._datasets.items():
+            if dset_key not in self._plots.keys():
+                self._plots[dset_key] = dict()
+            for var in dset['x'].columns:
+                if var not in self._plots[dset_key].keys():
+                    self._plots[dset_key][var] = dict()
+                plt.style.use(self.style)
                 fig, ax = plt.subplots(figsize=(8, 8))
-                true_x, true_y = ecdf(true)
-                pred_x, pred_y = ecdf(pred)
+                true_x, true_y = ecdf(dset['y'].loc[:, 'y'])
+                pred_x, pred_y = ecdf(dset['x'].loc[:, var])
                 ax.set_ylim(0, 1)
                 ax.set_xlabel("Measurement")
                 ax.set_ylabel("Cumulative Total")
-                ax.plot(true_x, true_y, linestyle="none", marker=".", label=self.y_name)
+                ax.plot(
+                        true_x,
+                        true_y,
+                        linestyle="none",
+                        marker=".",
+                        label=self.y_name
+                        )
                 ax.plot(
                     pred_x,
                     pred_y,
@@ -274,77 +486,47 @@ class Results:
                 )
                 ax.legend()
                 if isinstance(title, str):
-                    fig.suptitle(f"{title}\n{name} ({method})")
-                self._plots[name][method].append(fig)
+                    fig.suptitle(f"{title}\n{dset_key} ({var})")
+                self._plots[dset_key][var]['eCDF'] = fig
 
-    def temp_time_series_plot(
-        self, path, title=None
-    ):  # This is not a good way to do this
-        plt.style.use("Settings/style.mplstyle")
-        x_vals = self.x_measurements["Values"]
-        y_vals = self.y_measurements["Values"]
-        try:
-            dates_x = self.x_measurements["Datetime"]
-            dates_y = self.y_measurements["Datetime"]
-        except KeyError:
-            dates_x = self.x_measurements.index
-            dates_y = self.y_measurements.index
-        fig, ax = plt.subplots(figsize=(16, 8))
-        ax.plot(dates_y, y_vals, label=self.y_name)
-        ax.plot(dates_x, x_vals, label=self.x_name)
-        x_null = x_vals.isnull()
-        y_null = y_vals.isnull()
-        x_or_y_null = np.logical_or(x_null, y_null)
-        first_datetime = dates_x[0]
-        last_datetime = dates_x[-1]
-        ax.legend()
-        ax.set_xlim(first_datetime, last_datetime)
-        ax.set_xlabel("Datetime")
-        ax.set_ylabel("Concentration")
-        fig.savefig(f"{path}/Time Series.pgf")
-        fig.savefig(f"{path}/Time Series.png")
-        plt.close(fig)
+    def time_series_plot(self, title: Optional[str] = None):
+        for dset_key, dset in self._datasets.items():
+            if not bool(re.search(r' Full', dset_key)):
+                continue
+            if dset_key not in self._plots.keys():
+                self._plots[dset_key] = dict()
+            for var in dset['x'].columns:
+                if var not in self._plots[dset_key].keys():
+                    self._plots[dset_key][var] = dict()
+                plt.style.use(self.style)
+                x_vals = dset['x'].loc[:, var]
+                y_vals = dset['y'].loc[:, 'y']
+                dates_x = x_vals.index
+                dates_y = y_vals.index
+                fig, ax = plt.subplots(figsize=(16, 8))
+                ax.plot(dates_y, y_vals, label=self.y_name)
+                ax.plot(dates_x, x_vals, label=self.x_name)
+                x_null = x_vals.isnull()
+                y_null = y_vals.isnull()
+                combined_dates = (x_null and y_null)
+                first_datetime = x_vals.loc[combined_dates].index[0]
+                last_datetime = x_vals.loc[combined_dates].index[-1]
+                ax.legend()
+                ax.set_xlim(first_datetime, last_datetime)
+                ax.set_xlabel("Datetime")
+                ax.set_ylabel("Concentration")
+                if isinstance(title, str):
+                    fig.suptitle(f"{title}\n{dset_key} ({var})")
+                self._plots[dset_key][var]['Time Series'] = fig
 
-    def save_plots(self, path):
-        for key, item in self._plots.items():
-            self._plots[key] = pd.DataFrame(data=dict(item))
-            if "Plot" in self._plots[key].columns:
-                self._plots[key] = self._plots[key].set_index("Plot")
-            graph_types = self._plots[key].index.to_numpy()
-            for graph_type in graph_types:
-                graph_paths = dict()
-                for vars, plot in self._plots[key].loc[graph_type].to_dict().items():
-                    if plot is None:
-                        continue
-                    directory = Path(f"{path}/{key}/{vars}")
+    def save_plots(self, path: str, format: str = "pgf"):
+        for dset_key, dset_plots in self._plots.items():
+            for var, plots in dset_plots.items():
+                for name, plot in plots.items():
+                    directory = Path(f"{path}/{dset_key}/{var}")
                     directory.mkdir(parents=True, exist_ok=True)
-                    plot.savefig(f"{directory.as_posix()}/{graph_type}.pgf")
-                    graph_paths[vars] = f"{directory.as_posix()}/{graph_type}.pgf"
+                    plot.savefig(f"{directory.as_posix()}/{name}.{format}")
                     plt.close(plot)
-                    # key: Data set e.g uncalibrated full data
-                    # graph_type: Type of graph e.g Linear Regression
-                    # vars: Variables used e.g x + rh
-                    # plot: The figure to be saved
-
-    def save_results(self, path):
-        for key, item in self._errors.items():
-            self._errors[key] = pd.DataFrame(data=dict(item))
-            if "Variable" in self._errors[key].columns:
-                self._errors[key] = self._errors[key].set_index("Variable")
-                vars_list = self._errors[key].columns.to_list()
-                for vars in vars_list:
-                    error_results = pd.DataFrame(self._errors[key][vars])
-                    coefficients = pd.DataFrame(self.coefficients.loc[vars].T)
-                    directory = Path(f"{path}/{key}/{vars}")
-                    directory.mkdir(parents=True, exist_ok=True)
-                    con = sql.connect(f"{directory.as_posix()}/Results.db")
-                    error_results.to_sql(
-                        name="Errors", con=con, if_exists="replace", index=True
-                    )
-                    coefficients.to_sql(
-                        name="Coefficients", con=con, if_exists="replace", index=True
-                    )
-                    con.close()
 
 
 def ecdf(data):

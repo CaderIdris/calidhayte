@@ -1,16 +1,13 @@
 from collections import defaultdict
+from pathlib import Path
 import re
+import sqlite3 as sql
 from typing import Literal, Optional
 
-import matplotlib as mpl
-import matplotlib.pyplot as plt
 import pandas as pd
 from sklearn import metrics as met
 
 from .calibrate import Calibrate
-
-mpl.use("pgf")  # Used to make pgf files for latex
-plt.rcParams.update({"figure.max_open_warning": 0})
 
 
 class Results:
@@ -501,3 +498,29 @@ class Results:
     def return_errors(self) -> dict[str, pd.DataFrame]:
         """Returns all calculated errors in dataframe format"""
         return dict(self._errors)
+
+    def save_results(self, path: str):
+        for key, item in self._errors.items():
+            self._errors[key] = pd.DataFrame(data=dict(item))
+            if "Variable" in self._errors[key].columns:
+                self._errors[key] = self._errors[key].set_index("Variable")
+                vars_list = self._errors[key].columns.to_list()
+                for vars in vars_list:
+                    error_results = pd.DataFrame(self._errors[key][vars])
+                    coefficients = pd.DataFrame(self.coefficients.loc[vars].T)
+                    directory = Path(f"{path}/{key}/{vars}")
+                    directory.mkdir(parents=True, exist_ok=True)
+                    con = sql.connect(f"{directory.as_posix()}/Results.db")
+                    error_results.to_sql(
+                        name="Errors",
+                        con=con,
+                        if_exists="replace",
+                        index=True
+                    )
+                    coefficients.to_sql(
+                        name="Coefficients",
+                        con=con,
+                        if_exists="replace",
+                        index=True
+                    )
+                    con.close()
