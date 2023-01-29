@@ -610,7 +610,21 @@ class Coefficients:
                 "Negative Binomial",
                 "Poisson",
                 "Inverse Gaussian"
-                ] = "Gaussian"
+                ] = "Gaussian",
+            draws: int = 1000,
+            tune: int = 1000,
+            init: Literal[
+                "auto",
+                "adapt_diag",
+                "jitter+adapt_diag",
+                "jitter+adapt_diag_grad",
+                "advi+adapt_diag",
+                "advi",
+                "advi_map",
+                "map",
+                "adapt_full",
+                "jitter+adapt_full"
+                ] = "auto"
             ):
         """Performs bayesian linear regression (either uni or multivariate)
         on y against x
@@ -622,9 +636,9 @@ class Coefficients:
 
         Parameters
         ----------
-        mv_keys : list[str]
+        mv_keys : list[str], optional
             All multivariate variables to be used
-
+            Default is empty list
         family : Literal["Gaussian", "Student T", "Bernoulli", "Beta",
                          "Binomial", "Gamma", "Negative Binomial",
                          "Poisson", "Inverse Gaussian"]
@@ -639,6 +653,16 @@ class Coefficients:
                 - Poisson
                 - Inverse Gaussian
             It is likely that only Gaussian and Student T will be useful
+            Default is Gaussian
+        draws : int, optional
+            Number of samples to draw
+            Default is 1000
+        tune : int, optional
+            Number of iterations to tune
+            Default is 1000
+        init : str, optional
+            Mass matrix chosen/adapted for NUTS sampler
+            Default is auto
         """
         # Define model families
         model_families = {
@@ -661,9 +685,9 @@ class Coefficients:
             dropna=True,
         )
         fitted = model.fit(
-                draws=600,
-                tune=600,
-                init="adapt_diag",
+                draws=draws,
+                tune=tune,
+                init=init,
                 progressbar=False
                            )
         summary = az.summary(fitted)

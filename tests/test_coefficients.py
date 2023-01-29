@@ -31,6 +31,7 @@ def full_data():
 
 
 @pytest.mark.parametrize("split", [(0.5), (0.1), (0.9), (0), (1)])
+@pytest.mark.coeff
 def test_data_split(full_data, split):
     """
     Tests whether data is split properly
@@ -59,6 +60,7 @@ def test_data_split(full_data, split):
     assert all(tests.values())
 
 
+@pytest.mark.coeff
 def test_skl_formatting(full_data):
     """
     Tests whether skl coeffs are properly formatted
@@ -92,6 +94,7 @@ def test_skl_formatting(full_data):
     assert all(tests.values())
 
 
+@pytest.mark.coeff
 def test_pymc_formatting(full_data):
     """
     Tests whether pymc coeffs are properly formatted
@@ -153,6 +156,7 @@ def test_pymc_formatting(full_data):
                                  ])
                              ]
                          )
+@pytest.mark.coeff
 def test_skl_single_cals_ex_omp(full_data, reg_func, mv_keys):
     """
     Combines all possible multivariate key combos with each skl calibration
@@ -199,6 +203,7 @@ def test_skl_single_cals_ex_omp(full_data, reg_func, mv_keys):
                                  ])
                              ]
                          )
+@pytest.mark.coeff
 def test_skl_omp(full_data, mv_keys):
     """
     Combines all possible multivariate key combos with omp calibration
@@ -242,6 +247,7 @@ def test_skl_omp(full_data, mv_keys):
 @pytest.mark.parametrize("laslars", [None, Coefficients.lasso_lars])
 @pytest.mark.parametrize("ransac", [None, Coefficients.ransac])
 @pytest.mark.parametrize("theilsen", [None, Coefficients.theil_sen])
+@pytest.mark.coeff
 def test_combo_cal_skl(
         full_data,
         mv_keys,
@@ -308,6 +314,7 @@ def test_combo_cal_skl(
                              ]
                          )
 @pytest.mark.parametrize("family", ["Gaussian", "Student T"])
+@pytest.mark.coeff
 def test_bayesian(full_data, mv_keys, family):
     tests = dict()
     coeff_inst = Coefficients(

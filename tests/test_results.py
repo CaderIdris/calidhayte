@@ -75,7 +75,7 @@ def full_data_pymc():
 @pytest.mark.parametrize("map", [Results.mean_absolute_percentage, None])
 @pytest.mark.parametrize("r2", [Results.r2, None])
 @pytest.mark.parametrize("dset", ["skl", "pymc"])
-@pytest.mark.results
+@pytest.mark.result
 def test_result_calcs(
         evs,
         max,

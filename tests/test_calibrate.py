@@ -64,6 +64,7 @@ x + a,1,1,1,1,3,1"""
             }
 
 
+@pytest.mark.cal
 def test_skl_standard_cal(all_values_present_skl):
     """
     Tests that signals with associated scikitlearn coefficients are calibrated
@@ -92,6 +93,7 @@ def test_skl_standard_cal(all_values_present_skl):
     assert all(tests.values())
 
 
+@pytest.mark.cal
 def test_pymc_standard_cal(all_values_present_pymc):
     """
     Tests that signals with associated pymc coefficients are calibrated
@@ -130,6 +132,7 @@ def test_pymc_standard_cal(all_values_present_pymc):
     assert all(tests.values())
 
 
+@pytest.mark.cal
 def test_calibrate_blanks_provided():
     """
     Tests that the proper error is raised when passing in blank dataframes
@@ -160,6 +163,7 @@ def test_calibrate_blanks_provided():
             )
          ]
     )
+@pytest.mark.cal
 def test_join_measurements(
         data_type,
         ex_or,

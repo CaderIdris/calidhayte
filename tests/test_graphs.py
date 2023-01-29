@@ -97,7 +97,7 @@ def full_data_pymc():
 @pytest.mark.parametrize("min", ["", "Minimum"])
 @pytest.mark.parametrize("max", ["", "Maximum"])
 @pytest.mark.parametrize("dset", ["skl", "pymc"])
-@pytest.mark.graphs
+@pytest.mark.graph
 def test_prepare_datasets(
         cal_train,
         cal_test,
@@ -199,7 +199,7 @@ def test_prepare_datasets(
 @pytest.mark.parametrize("ecdf", [Graphs.ecdf_plot, None])
 @pytest.mark.parametrize("ts", [Graphs.time_series_plot, None])
 @pytest.mark.parametrize("dset", ["skl", "pymc"])
-@pytest.mark.graphplots
+@pytest.mark.graph
 def test_plot(
         lreg,
         ba,

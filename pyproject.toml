@@ -7,6 +7,13 @@ addopts = "--cov=calidhayte tests/ --cov-report html --html=report.html --self-c
 testpaths = [
 	"tests",
 ]
+markers = [
+	"graph",
+	"summary",
+	"result",
+	"coeff",
+	"cal"
+]
 
 [tool.mypy]
 mypy_path = "src"
