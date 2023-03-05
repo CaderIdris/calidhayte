@@ -35,6 +35,22 @@ class Summary:
         """
         self._dataframes = dataframes
         dfs = list(self._dataframes.values())
+        for df in dfs:
+            scores_to_invert = list(
+                    filter(
+                        lambda x: x in df.columns,
+                        [
+                            "Explained Variance Score",
+                            "r2",
+                            "Mean Pinball Deviance",
+                            "Mean Poisson Deviance",
+                            "Mean Gamma Deviance",
+                            ]
+                        )
+                )
+            if scores_to_invert:
+                df.loc[:, scores_to_invert] = 1 - df.loc[:, scores_to_invert]
+
         self.group = pd.concat(dfs).groupby(by=dfs[0].index.name, level=0)
 
     def mean(self) -> pd.DataFrame:
