@@ -17,6 +17,7 @@ from typing import Any, DefaultDict, Literal
 import arviz as az
 import bambi as bmb
 import numpy as np
+import numpy.typing as npt
 import pandas as pd
 from sklearn import linear_model as lm
 from sklearn.preprocessing import StandardScaler
@@ -261,7 +262,7 @@ class Coefficients:
 
     def store_coefficients_skl(
         self,
-        coeffs_scaled: np.ndarray[Any, Any],
+        coeffs_scaled: npt.ArrayLike,
         intercept_scaled: float,
         mv_keys: list[str],
         scaler: StandardScaler,
