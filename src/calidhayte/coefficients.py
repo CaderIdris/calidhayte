@@ -12,7 +12,7 @@ a range of errors (using the testing subset if available).
 from collections import defaultdict
 import re
 import logging
-from typing import Any, DefaultDict, Literal
+from typing import DefaultDict, Literal
 
 import arviz as az
 import bambi as bmb
