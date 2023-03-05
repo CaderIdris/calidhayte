@@ -261,7 +261,7 @@ class Coefficients:
 
     def store_coefficients_skl(
         self,
-        coeffs_scaled: np.ndarray[Any, np.dtype[np.float64]],
+        coeffs_scaled: np.ndarray[Any, Any],
         intercept_scaled: float,
         mv_keys: list[str],
         scaler: StandardScaler,
