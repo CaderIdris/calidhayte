@@ -9,7 +9,6 @@ from sklearn import metrics as met
 
 from .calibrate import Calibrate
 
-mpl.use("pgf")  # Used to make pgf files for latex
 plt.rcParams.update({"figure.max_open_warning": 0})
 
 
