@@ -7,3 +7,4 @@
 .tox/
 .coverage
 report.html
+build/*

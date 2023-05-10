@@ -887,3 +887,9 @@ class Calibrate:
                 xgb.XGBRFRegressor(**kwargs),
                 name
                 )
+
+    def return_measurements(self) -> dict[str, pd.DataFrame]:
+        return {
+                'x': self.x_data,
+                'y': self.y_data
+                }

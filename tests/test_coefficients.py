@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from calidhayte import Coefficients
+from calidhayte import Calibrate
 
 
 @pytest.fixture
@@ -13,7 +13,7 @@ def full_data():
     """
     np.random.seed(72)
     x_df = pd.DataFrame()
-    x_df['Values'] = pd.Series(np.random.rand(300))
+    x_df['x'] = pd.Series(np.random.rand(300))
     x_df['a'] = pd.Series(np.random.rand(300))
     x_df['b'] = pd.Series(np.random.rand(300))
     x_df['c'] = pd.Series(np.random.rand(300))
@@ -22,7 +22,7 @@ def full_data():
     y_df = pd.DataFrame()
     modded = x_df * coeffs
 
-    y_df['Values'] = modded.sum(axis=1)
+    y_df['x'] = modded.sum(axis=1)
 
     return {
             'x': x_df,
@@ -30,91 +30,26 @@ def full_data():
             }
 
 
-@pytest.mark.parametrize("split", [(0.5), (0.1), (0.9), (0), (1)])
-def test_data_split(full_data, split):
+@pytest.mark.parametrize("folds", [2, 3, 4, 5])
+def test_data_split(full_data, folds):
     """
     Tests whether data is split properly
     """
     tests = dict()
-    coeff_inst = Coefficients(
+    coeff_inst = Calibrate(
             x_data=full_data['x'],
             y_data=full_data['y'],
-            test_size=split
+            target='x'
             )
-    split_coeffs = coeff_inst.return_measurements()
-    test = split_coeffs['Test']
-    train = split_coeffs['Train']
-    if split < 0.5 and split != 0:
-        tests['Test smaller than Train'] = test.shape[0] < train.shape[0]
-    elif split > 0.5 and split != 1:
-        tests['Test bigger than Train'] = test.shape[0] > train.shape[0]
-    elif split == 0.5 or split in [0, 1]:
-        tests['Test equals train'] = test.shape[0] == train.shape[0]
-    else:
-        tests['If this happens there is an error in the test logic'] = False
+    split_coeffs = coeff_inst.return_measurements()['y']
+    num_of_folds = split_coeffs.loc[:, 'Fold'].nunique().size
+    test_prop = split_coeffs.loc[:, 'Fold'].nunique()[0] /\
+        split_coeffs.shape[0]
 
+    tests['Correct Num of Folds'] = num_of_folds == folds
+    tests['Correct Prop of Folds'] = test_prop == pytest.approx(1/(folds), 0.1)
     for test, result in tests.items():
         print(f"{test}: {result}")
-
-    assert all(tests.values())
-
-
-def test_skl_formatting(full_data):
-    """
-    Tests whether skl coeffs are properly formatted
-    """
-    tests = dict()
-    coeff_inst = Coefficients(
-            x_data=full_data['x'],
-            y_data=full_data['y']
-            )
-
-    x_df, y_df, sc_x, com_s = coeff_inst.format_skl(
-            coeff_inst.x_train.columns[1:]
-            )
-    tests['x same length as y'] = len(x_df) == y_df.shape[0]
-    tests['Combo keys are correct'] = all(
-            [key in ["x", "a", "b", "c"] for key in com_s]
-            )
-    tests['x mean is 0'] = (
-            pd.DataFrame(x_df).mean().astype(int) == 0
-            ).all()
-    tests['x std is 1'] = (
-            pd.DataFrame(x_df).std().astype(int) == 1
-            ).all()
-
-    tests['x scale roughly 0.28'] = (sc_x.scale_.round(2) == 0.28).all()
-    tests['x scaled mean roughly 0.5'] = (sc_x.mean_.round(1) == 0.5).all()
-
-    for test, result in tests.items():
-        print(f"{test}: {result}")
-
-    assert all(tests.values())
-
-
-def test_pymc_formatting(full_data):
-    """
-    Tests whether pymc coeffs are properly formatted
-    """
-    tests = dict()
-
-    coeff_inst = Coefficients(
-            x_data=full_data['x'],
-            y_data=full_data['y']
-            )
-
-    df, bam_s, key_s = coeff_inst.format_pymc(
-            coeff_inst.x_train.columns[1:]
-            )
-
-    tests['df length correct'] = df.shape[0] == 180
-    tests['df number of columns correct'] = df.shape[1] == 5
-    tests['Bambi keys correct'] = all(
-            [key in ["x", "oao", "obo", "oco"] for key in bam_s]
-            )
-    tests['Combo strings correct'] = all(
-            [key in ["x", "a", "b", "c"] for key in key_s]
-            )
 
     assert all(tests.values())
 
