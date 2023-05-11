@@ -11,6 +11,7 @@ a range of errors (using the testing subset if available).
 
 from copy import deepcopy as dc
 import logging
+import sys
 from typing import Any, Literal
 
 import bambi as bmb
@@ -68,22 +69,26 @@ def cont_strat_folds(
     www.kaggle.com/code/tolgadincer/continuous-target-stratification/notebook
     """
     y_df['Fold'] = -1
-    skf = StratifiedKFold(n_splits=splits, random_state=seed)
+    skf = StratifiedKFold(
+            n_splits=splits,
+            random_state=seed,
+            shuffle=True
+            )
     y_df['Group'] = pd.cut(
-            y_df[:, target_var],
+            y_df.loc[:, target_var],
             strat_groups,
             labels=False
             )
-    target = y_df.loc[:, target_var]
+    group_label = y_df.loc[:, 'Group']
 
-    for fold_number, (_, v) in enumerate(skf.split(target, target)):
+    for fold_number, (_, v) in enumerate(skf.split(group_label, group_label)):
         y_df.loc[v, 'Fold'] = fold_number
     return y_df.drop('Group', axis=1)
 
 
 class Calibrate:
     """
-
+    Calibrate x against y using a range of methods
     ```
 
     Attributes
@@ -123,7 +128,7 @@ class Calibrate:
         seed : int, optional
             random state, default is 62
         """
-        if target not in x_data.columns + y_data.columns:
+        if target not in x_data.columns or target not in y_data.columns:
             raise ValueError(
                     f"{target} does not exist in both columns,"
                     f" skipping comparison."
@@ -143,19 +148,14 @@ class Calibrate:
                 strat_groups,
                 seed
                 )
-        self.y_data = self.y_data.drop(
-                [
-                    col for col in self.y_data.columns
-                    if col not in ['Fold', target]
-                    ]
-                )
-        self.models: dict[str, dict[int, Pipeline]] = dict()
+        self.models: dict[str, dict[str, dict[int, Pipeline]]] = dict()
 
     def _sklearn_regression_meta(
             self,
             reg: Any,
             name: str,
-            min_coeffs: int = 1
+            min_coeffs: int = 1,
+            max_coeffs: int = (sys.maxsize * 2) + 1
             ):
         """
         Metaclass, formats data and uses sklearn classifier to
@@ -173,30 +173,30 @@ class Calibrate:
         x_secondary_cols = self.x_data.drop(self.target, axis=1).columns
         products = [[np.nan, col] for col in x_secondary_cols]
         secondary_vals = pd.MultiIndex.from_product(products)
+        self.models[name] = dict()
         for sec_vals in secondary_vals:
             vals = [self.target] + [v for v in sec_vals if v == v]
-            if len(vals) < min_coeffs:
+            vals_str = ', '.join(vals)
+            if len(vals) < min_coeffs or len(vals) > max_coeffs:
                 continue
-            model_name = f'{name} ({", ".join(vals)})'
-            self.models[model_name] = dict()
+            self.models[name][vals_str] = dict()
             for fold in self.y_data.loc[:, 'Fold'].unique():
-                y_data = self.y_data[
-                        self.y_data.loc[:, 'Fold'] != fold
-                        ].drop('Fold', axis=1)
-                ss = StandardScaler()
-                x_data = ss.fit_transform(
-                        self.x_data.loc[y_data.index, vals]
-                        )
-                reg.fit(x_data, y_data)
                 pipeline = Pipeline([
                     ("Selector", ColumnTransformer([
                             ("selector", "passthrough", vals)
                         ], remainder="drop")
                      ),
-                    ("Standard Scaler", ss),
+                    ("Standard Scaler", StandardScaler()),
                     ("Regressor", reg)
                     ])
-                self.models[model_name][fold] = dc(pipeline)
+                y_data = self.y_data[
+                        self.y_data.loc[:, 'Fold'] != fold
+                        ]
+                pipeline.fit(
+                        self.x_data.loc[y_data.index, :],
+                        y_data.loc[:, self.target]
+                        )
+                self.models[name][vals_str][fold] = dc(pipeline)
 
     def pymc_bayesian(
             self,
@@ -505,7 +505,8 @@ class Calibrate:
         """
         self._sklearn_regression_meta(
                 lm.OrthogonalMatchingPursuit(**kwargs),
-                name
+                name,
+                min_coeffs=2
                 )
 
     def bayesian_ridge(self, name: str = "Bayesian Ridge Regression", **kwargs):
@@ -523,7 +524,11 @@ class Calibrate:
                 name
                 )
 
-    def bayesian_ard(self, name: str = "Bayesian Automatic Relevance Detection", **kwargs):
+    def bayesian_ard(
+            self,
+            name: str = "Bayesian Automatic Relevance Detection",
+            **kwargs
+            ):
         """
         Fit x on y via bayesian automatic relevance detection
 
@@ -688,7 +693,11 @@ class Calibrate:
                 name
                 )
 
-    def extra_trees_enseble(self, name: str = "Extra Trees Ensemble", **kwargs):
+    def extra_trees_ensemble(
+            self,
+            name: str = "Extra Trees Ensemble",
+            **kwargs
+            ):
         """
         Fit x on y using an ensemble of extra trees
 
@@ -837,7 +846,7 @@ class Calibrate:
             Name of classification technique, default is PLS Regression
         """
         self._sklearn_regression_meta(
-                cd.PLSRegression(**kwargs),
+                cd.PLSRegression(n_components=1, **kwargs),
                 name
                 )
 
@@ -852,7 +861,8 @@ class Calibrate:
         """
         self._sklearn_regression_meta(
                 iso.IsotonicRegression(**kwargs),
-                name
+                name,
+                max_coeffs=1
                 )
 
     def xgboost(self, name: str = "XGBoost Regression", **kwargs):
@@ -893,3 +903,6 @@ class Calibrate:
                 'x': self.x_data,
                 'y': self.y_data
                 }
+
+    def return_models(self) -> dict[str, dict[str, dict[int, Pipeline]]]:
+        return self.models
