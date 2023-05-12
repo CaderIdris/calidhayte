@@ -8,3 +8,4 @@
 .coverage
 report.html
 build/*
+.tmp/*

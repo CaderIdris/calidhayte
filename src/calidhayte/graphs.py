@@ -1,10 +1,13 @@
+import pathlib
 from typing import Any, Optional
 
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from sklearn.pipeline import Pipeline
-from sklearn.ensemble import VotingRegressor
+
+mpl.use('pgf')
 
 
 class Graphs:
@@ -20,17 +23,23 @@ class Graphs:
     def __init__(
         self,
         x: pd.DataFrame,
+        x_name: str,
         y: pd.DataFrame,
+        y_name: str,
         target: str,
-        models: dict[str, dict[str, dict[int, Pipeline]]]
+        models: dict[str, dict[str, dict[int, Pipeline]]],
+        style: str = 'bmh'
     ):
         """
         """
         self.x = x
         self.y = y
+        self.x_name = x_name
+        self.y_name = y_name
         self.target = target
         self.models = models
         self.plots: dict[str, dict[str, dict[str, plt.figure.Figure]]] = dict()
+        self.style = style
 
     def _plot_meta(self, plot_class: Any, name: str, **kwargs):
         for technique, var_combos in self.models.items():
@@ -39,24 +48,55 @@ class Graphs:
             for vars, folds in var_combos.items():
                 if self.plots[technique].get(vars) is None:
                     self.plots[technique][vars] = dict()
-                reg = VotingRegressor(folds.values())
-                pred = reg.predict(self.x)
+                pred = pd.Series()
+                for fold, model in folds.items():
+                    x_data = self.x.loc[
+                            self.y[self.y.loc[:, 'Fold'] == fold].index,
+                            :
+                            ]
+                    pred = pd.concat(
+                            [
+                                pred,
+                                pd.Series(
+                                    index=x_data.index,
+                                    data=model.predict(x_data)
+                                    )
+                            ]
+                        )
                 x = pred
-                y = self.y.loc[:, self.target]
-                fig = plot_class(x, y, **kwargs)
+                y = self.y.loc[:, self.target].reindex(x.index)
+                fig = plot_class(
+                        x=x,
+                        y=y,
+                        x_name=self.x_name,
+                        y_name=self.y_name,
+                        **kwargs
+                        )
                 self.plots[technique][vars][name] = fig
 
     def bland_altman_plot(self, title=None):
-        self._plot_meta(bland_altman_plot, 'Bland-Altman', title=title)
+        with plt.rc_context({'backend': 'pgf'}), plt.style.context(self.style):
+            self._plot_meta(bland_altman_plot, 'Bland-Altman', title=title)
 
     def ecdf_plot(self, title=None):
-        self._plot_meta(ecdf_plot, 'eCDF', title=title)
+        with plt.rc_context({'backend': 'pgf'}), plt.style.context(self.style):
+            self._plot_meta(ecdf_plot, 'eCDF', title=title)
 
     def lin_reg_plot(self, title=None):
-        self._plot_meta(lin_reg_plot, 'Linear Regression', title=title)
+        with plt.rc_context({'backend': 'pgf'}), plt.style.context(self.style):
+            self._plot_meta(lin_reg_plot, 'Linear Regression', title=title)
 
     def save_plots(self, path):
-        pass
+        for technique, var_combos in self.plots.items():
+            for vars, figures in var_combos.items():
+                for plot_type, fig in figures.items():
+                    plot_path = pathlib.Path(
+                            f'{path}/{technique}/{plot_type}'
+                            )
+                    plot_path.mkdir(parents=True, exist_ok=True)
+                    fig.savefig(plot_path / f'{vars}.png')
+                    fig.savefig(plot_path / f'{vars}.pgf')
+                    plt.close(fig)
 
 
 def ecdf(data):
@@ -66,7 +106,7 @@ def ecdf(data):
 
 
 def lin_reg_plot(
-        x: pd.DataFrame,
+        x: pd.Series,
         y: pd.Series,
         x_name: str,
         y_name: str,
@@ -94,7 +134,7 @@ def lin_reg_plot(
     histy_ax = fig.add_subplot(fig_gs[1, 1], sharey=scatter_ax)
     histy_ax.axis("off")
 
-    max_value = max(max(y), max(x))
+    max_value = max((y.max(), x.max()))
     scatter_ax.set_xlim(0, max_value)
     scatter_ax.set_ylim(0, max_value)
     scatter_ax.set_xlabel(x_name)
@@ -116,7 +156,8 @@ def lin_reg_plot(
 def bland_altman_plot(
         x: pd.DataFrame,
         y: pd.Series,
-        title: Optional[str] = None
+        title: Optional[str] = None,
+        **kwargs
         ):
     """
     """
