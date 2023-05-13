@@ -25,7 +25,7 @@ from sklearn import linear_model as lm
 from sklearn import neural_network as nn
 from sklearn import svm
 from sklearn import tree
-from sklearn.preprocessing import StandardScaler
+import sklearn.preprocessing as pre
 from sklearn.model_selection import StratifiedKFold
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
@@ -39,7 +39,7 @@ def cont_strat_folds(
         y_df: pd.DataFrame,
         target_var: str,
         splits: int = 5,
-        strat_groups: int = 10,
+        strat_groups: int = 5,
         seed: int = 62
         ):
     """
@@ -148,14 +148,28 @@ class Calibrate:
                 strat_groups,
                 seed
                 )
-        self.models: dict[str, dict[str, dict[int, Pipeline]]] = dict()
+        self.models: dict[str,  # Technique name
+                          dict[str,  # Scaling technique
+                               dict[str,  # Variable combo
+                                    dict[int,  # Fold
+                                         Pipeline]]]] = dict()
 
     def _sklearn_regression_meta(
             self,
             reg: Any,
             name: str,
+            scaler: Literal[
+                'None',
+                'Standard Scale',
+                'MinMax Scale',
+                'Yeo-Johnson Transform'
+                'Box-Cox Transform',
+                'Quantile Transform (Uniform)',
+                'Quantile Transform (Gaussian)'
+                ] = 'None',
             min_coeffs: int = 1,
-            max_coeffs: int = (sys.maxsize * 2) + 1
+            max_coeffs: int = (sys.maxsize * 2) + 1,
+            **kwargs
             ):
         """
         Metaclass, formats data and uses sklearn classifier to
@@ -169,34 +183,78 @@ class Calibrate:
             Name of classification technique to save pipeline to
         min_coeffs : int, optional
             Minimum number of coefficients for technique, default is 1
+        max_coeffs : int, optional
+            Maximum number of coefficients for technique, default is max int
+            size
         """
+        scalers: dict[str, Any] = {
+                'None': None,
+                'Standard Scale': pre.StandardScaler(),
+                'MinMax Scale': pre.MinMaxScaler(),
+                'Yeo-Johnson Transform': pre.PowerTransformer(
+                    method='yeo-johnson'
+                    ),
+                'Box-Cox Transform': pre.PowerTransformer(method='box-cox'),
+                'Quantile Transform (Uniform)': pre.QuantileTransformer(
+                    output_distribution='uniform'
+                    ),
+                'Quantile Transform (Gaussian)': pre.QuantileTransformer(
+                    output_distribution='normal'
+                    )
+                }
         x_secondary_cols = self.x_data.drop(self.target, axis=1).columns
         products = [[np.nan, col] for col in x_secondary_cols]
         secondary_vals = pd.MultiIndex.from_product(products)
-        self.models[name] = dict()
+        if self.models.get(name) is None:
+            self.models[name] = dict()
+        if self.models[name].get(scaler) is None:
+            self.models[name][scaler] = dict()
         for sec_vals in secondary_vals:
             vals = [self.target] + [v for v in sec_vals if v == v]
-            vals_str = ', '.join(vals)
+            vals_str = ' + '.join(vals)
             if len(vals) < min_coeffs or len(vals) > max_coeffs:
                 continue
-            self.models[name][vals_str] = dict()
+            self.models[name][scaler][vals_str] = dict()
             for fold in self.y_data.loc[:, 'Fold'].unique():
-                pipeline = Pipeline([
-                    ("Selector", ColumnTransformer([
-                            ("selector", "passthrough", vals)
-                        ], remainder="drop")
-                     ),
-                    ("Standard Scaler", StandardScaler()),
-                    ("Regressor", reg)
-                    ])
                 y_data = self.y_data[
                         self.y_data.loc[:, 'Fold'] != fold
                         ]
-                pipeline.fit(
-                        self.x_data.loc[y_data.index, :],
-                        y_data.loc[:, self.target]
+                if reg in ['t', 'gaussian']:
+                    sc = scalers[scaler]
+                    if sc is not None:
+                        x_data = sc.fit_transform(
+                                self.x_data.loc[y_data.index, :]
+                                )
+                    else:
+                        x_data = self.x_data.loc[y_data.index, :]
+                    x_data['y'] = y_data.loc[:, self.target]
+                    model = bmb.Model(
+                            f"y ~ {vals_str}",
+                            x_data,
+                            family=reg
+                            )
+                    _ = model.fit(
+                        progressbar=False,
+                        **kwargs
                         )
-                self.models[name][vals_str][fold] = dc(pipeline)
+                    pipeline = Pipeline([
+                        ("Scaler", scaler),
+                        ("Regression", model)
+                        ])
+                else:
+                    pipeline = Pipeline([
+                        ("Selector", ColumnTransformer([
+                                ("selector", "passthrough", vals)
+                            ], remainder="drop")
+                         ),
+                        ("Scaler", scalers[scaler]),
+                        ("Regression", reg)
+                        ])
+                    pipeline.fit(
+                            self.x_data.loc[y_data.index, :],
+                            y_data.loc[:, self.target]
+                            )
+                self.models[name][scaler][vals_str][fold] = dc(pipeline)
 
     def pymc_bayesian(
             self,
@@ -204,6 +262,7 @@ class Calibrate:
                 "Gaussian",
                 "Student T",
                 ] = "Gaussian",
+            name: str = " PyMC Bayesian",
             **kwargs
             ):
         """Performs bayesian linear regression (either uni or multivariate)
@@ -225,50 +284,13 @@ class Calibrate:
         # Define model families
         model_families = {
             "Gaussian": "gaussian",
-            "Student T": "t",
-            "Bernoulli": "bernoulli",
-            "Beta": "beta",
-            "Binomial": "binomial",
-            "Gamma": "gamma",
-            "Negative Binomial": "negativebinomial",
-            "Poisson": "poisson",
-            "Inverse Gaussian": "wald",
+            "Student T": "t"
         }
-        x_secondary_cols = self.x_data.drop(self.target, axis=1).columns
-        products = [[np.nan, col] for col in x_secondary_cols]
-        secondary_vals = pd.MultiIndex.from_product(products)
-        for sec_vals in secondary_vals:
-            vals = [self.target] + [v for v in sec_vals if v == v]
-            model_name = f'Bayesian {family} ({", ".join(vals)})'
-            self.models[model_name] = dict()
-            for fold in self.y_data.loc[:, 'Fold'].unique():
-                y_data = self.y_data[
-                        self.y_data.loc[:, 'Fold'] != fold
-                        ].drop('Fold', axis=1)
-                ss = StandardScaler()
-                x_data = ss.fit_transform(
-                        self.x_data.loc[y_data.index, vals]
-                        )
-                x_data['y'] = y_data.loc[:, self.target]
-
-                model = bmb.Model(
-                        f"y ~ {' + '.join(vals)}",
-                        x_data,
-                        family=model_families[family]
-                        )
-                model.fit(
-                        progressbar=False,
-                        **kwargs
-                        )
-                pipeline = Pipeline([
-                    ("Selector", ColumnTransformer([
-                            ("selector", "passthrough", x_data.drop('y', vals))
-                        ], remainder="drop")
-                     ),
-                    ("Standard Scaler", ss),
-                    ("Regressor", model)
-                    ])
-                self.models[model_name][fold] = dc(pipeline)
+        self._sklearn_regression_meta(
+                model_families[family],
+                f'{name} ({model_families})',
+                **kwargs
+                )
 
     def linreg(self, name: str = "Linear Regression", **kwargs):
         """
@@ -904,5 +926,9 @@ class Calibrate:
                 'y': self.y_data
                 }
 
-    def return_models(self) -> dict[str, dict[str, dict[int, Pipeline]]]:
+    def return_models(self) -> dict[str,  # Technique
+                                    dict[str,  # Scaling method
+                                         dict[str,  # Variables used
+                                              dict[int,  # Fold
+                                                   Pipeline]]]]:
         return self.models

@@ -36,7 +36,7 @@ def trained_models():
             'x': x_df,
             'y': y_df,
             'target': 'x',
-            'pipelines': cal.return_models()
+            'models': cal.return_models()
             }
 
 

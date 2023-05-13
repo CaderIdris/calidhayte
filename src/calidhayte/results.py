@@ -55,34 +55,38 @@ class Results:
         x: pd.DataFrame,
         y: pd.DataFrame,
         target: str,
-        pipelines: dict[str, dict[str, dict[int, Pipeline]]],
+        models: dict[str, dict[str, dict[str, dict[int, Pipeline]]]]
     ):
         """
         """
         self.x = x
         self.y = y
         self.target = target
-        self.pipelines = pipelines
+        self.models = models
         self._errors = pd.DataFrame()
 
     def _sklearn_error_meta(self, err: Any, name: str, **kwargs):
         """
         """
         idx = 0
-        for technique, var_combos in self.pipelines.items():
-            for vars, folds in var_combos.items():
-                for fold, pipe in folds.items():
-                    true = self.y.loc[
-                            :, self.target
-                            ][self.y.loc[:, 'Fold'] == fold]
-                    pred_raw = self.x.loc[true.index, :]
-                    pred = pipe.predict(pred_raw)
-                    error = err(true, pred, **kwargs)
-                    self._errors.loc[idx, 'Technique'] = technique
-                    self._errors.loc[idx, 'Variables'] = vars
-                    self._errors.loc[idx, 'Fold'] = fold
-                    self._errors.loc[idx, name] = error
-                    idx = idx+1
+        for technique, scaling_techniques in self.models.items():
+            for scaling_technique, var_combos in scaling_techniques.items():
+                for vars, folds in var_combos.items():
+                    for fold, pipe in folds.items():
+                        true = self.y.loc[
+                                :, self.target
+                                ][self.y.loc[:, 'Fold'] == fold]
+                        pred_raw = self.x.loc[true.index, :]
+                        pred = pipe.predict(pred_raw)
+                        error = err(true, pred, **kwargs)
+                        self._errors.loc[idx, 'Technique'] = technique
+                        self._errors.loc[
+                                idx, 'Scaling Method'
+                                ] = scaling_technique
+                        self._errors.loc[idx, 'Variables'] = vars
+                        self._errors.loc[idx, 'Fold'] = fold
+                        self._errors.loc[idx, name] = error
+                        idx = idx+1
 
     def explained_variance_score(self):
         """Calculate the explained variance score between the true values (y)
@@ -244,4 +248,6 @@ class Results:
 
     def return_errors(self) -> pd.DataFrame:
         """Returns all calculated errors in dataframe format"""
-        return self._errors.set_index(['Technique', 'Variables', 'Fold'])
+        return self._errors.set_index(
+                ['Technique', 'Scaling Method', 'Variables', 'Fold']
+                )

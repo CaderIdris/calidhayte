@@ -15,9 +15,7 @@ def full_data():
     x_df = pd.DataFrame()
     x_df['x'] = pd.Series(np.random.rand(300))
     x_df['a'] = pd.Series(np.random.rand(300))
-    x_df['b'] = pd.Series(np.random.rand(300))
-    x_df['c'] = pd.Series(np.random.rand(300))
-    coeffs = np.random.randn(4)
+    coeffs = np.random.randn(2)
 
     y_df = pd.DataFrame()
     modded = x_df * coeffs
@@ -27,8 +25,6 @@ def full_data():
     z_df = pd.DataFrame()
     z_df['x'] = pd.Series(np.random.rand(300))
     z_df['a'] = pd.Series(np.random.rand(300))
-    z_df['b'] = pd.Series(np.random.rand(300))
-    z_df['c'] = pd.Series(np.random.rand(300))
 
     return {
             'x': x_df,
@@ -108,7 +104,8 @@ def test_skl_cals(full_data):
             Calibrate.theil_sen,
             Calibrate.tweedie,
             Calibrate.xgboost,
-            Calibrate.xgboost_rf
+            Calibrate.xgboost_rf,
+            # Calibrate.pymc_bayesian
             ]
     coeff_inst = Calibrate(
             x_data=full_data['x'],
@@ -119,27 +116,31 @@ def test_skl_cals(full_data):
         print(func)
         func(coeff_inst)
     models = coeff_inst.return_models()
-    for technique, var_combos in models.items():
-        print(technique)
-        if technique == "Orthogonal Matching Pursuit":
-            correct_num_of_vars = 7
-        elif technique == "Isotonic Regression":
-            print(var_combos.keys())
-            correct_num_of_vars = 1
-        else:
-            correct_num_of_vars = 8
-        tests[f'Correct number of vars {technique}'] = len(
-                var_combos.keys()
-                ) == correct_num_of_vars
-        for vars, folds in var_combos.items():
-            tests[
-                    f'Correct number of folds {technique} {vars}'
-                    ] = len(folds.keys()) == 5
-            for fold, pipe in folds.items():
-                _ = pipe.predict(full_data['z'])
+    for technique, scaling_methods in models.items():
+        tests[f'Correct number of scalers {technique}'] = len(
+                scaling_methods.keys()
+                ) == 1
+        for _, var_combos in scaling_methods.items():
+            if technique == "Orthogonal Matching Pursuit":
+                correct_num_of_vars = 1
+            elif technique == "Isotonic Regression":
+                print(var_combos.keys())
+                correct_num_of_vars = 1
+            else:
+                correct_num_of_vars = 2
+            tests[f'Correct number of vars {technique}'] = len(
+                    var_combos.keys()
+                    ) == correct_num_of_vars
+
+            for vars, folds in var_combos.items():
                 tests[
-                        f'Pipe for {technique} {vars} {fold} works'
-                        ] = True
+                        f'Correct number of folds {technique} {vars}'
+                        ] = len(folds.keys()) == 5
+                for fold, pipe in folds.items():
+                    _ = pipe.predict(full_data['z'])
+                    tests[
+                            f'Pipe for {technique} {vars} {fold} works'
+                            ] = True
     for test, result in tests.items():
         print(f"{test}: {result}")
     assert all(tests.values())

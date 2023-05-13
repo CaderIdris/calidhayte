@@ -1,14 +1,11 @@
 import pathlib
 from typing import Any, Optional
 
-import matplotlib as mpl
+from matplotlib import get_backend
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from sklearn.pipeline import Pipeline
-
-mpl.use('pgf')
-
 
 class Graphs:
     """Calculates errors between "true" and "predicted" measurements, plots
@@ -27,8 +24,9 @@ class Graphs:
         y: pd.DataFrame,
         y_name: str,
         target: str,
-        models: dict[str, dict[str, dict[int, Pipeline]]],
-        style: str = 'bmh'
+        models: dict[str, dict[str, dict[str, dict[int, Pipeline]]]],
+        style: str = 'bmh',
+        backend: str = get_backend()
     ):
         """
         """
@@ -38,65 +36,77 @@ class Graphs:
         self.y_name = y_name
         self.target = target
         self.models = models
-        self.plots: dict[str, dict[str, dict[str, plt.figure.Figure]]] = dict()
+        self.plots: dict[str,  # Technique
+                         dict[str,  # Scaling Method
+                              dict[str,  # Variables used
+                                   dict[str,  # Plot Name
+                                        plt.figure.Figure]]]] = dict()
         self.style = style
+        self.backend = backend
 
     def _plot_meta(self, plot_class: Any, name: str, **kwargs):
-        for technique, var_combos in self.models.items():
+        for technique, scaling_methods in self.models.items():
             if self.plots.get(technique) is None:
                 self.plots[technique] = dict()
-            for vars, folds in var_combos.items():
-                if self.plots[technique].get(vars) is None:
-                    self.plots[technique][vars] = dict()
-                pred = pd.Series()
-                for fold, model in folds.items():
-                    x_data = self.x.loc[
-                            self.y[self.y.loc[:, 'Fold'] == fold].index,
-                            :
-                            ]
-                    pred = pd.concat(
-                            [
-                                pred,
-                                pd.Series(
-                                    index=x_data.index,
-                                    data=model.predict(x_data)
-                                    )
-                            ]
-                        )
-                x = pred
-                y = self.y.loc[:, self.target].reindex(x.index)
-                fig = plot_class(
-                        x=x,
-                        y=y,
-                        x_name=self.x_name,
-                        y_name=self.y_name,
-                        **kwargs
-                        )
-                self.plots[technique][vars][name] = fig
+            for scaling_method, var_combos in scaling_methods.items():
+                if self.plots[technique].get(scaling_method) is None:
+                    self.plots[technique][scaling_method] = dict()
+                for vars, folds in var_combos.items():
+                    if self.plots[technique][scaling_method].get(vars) is None:
+                        self.plots[technique][scaling_method][vars] = dict()
+                    pred = pd.Series()
+                    for fold, model in folds.items():
+                        x_data = self.x.loc[
+                                self.y[self.y.loc[:, 'Fold'] == fold].index,
+                                :
+                                ]
+                        pred = pd.concat(
+                                [
+                                    pred,
+                                    pd.Series(
+                                        index=x_data.index,
+                                        data=model.predict(x_data)
+                                        )
+                                ]
+                            )
+                    x = pred
+                    y = self.y.loc[:, self.target].reindex(x.index)
+                    fig = plot_class(
+                            x=x,
+                            y=y,
+                            x_name=self.x_name,
+                            y_name=self.y_name,
+                            **kwargs
+                            )
+                    self.plots[technique][scaling_method][vars][name] = fig
 
     def bland_altman_plot(self, title=None):
-        with plt.rc_context({'backend': 'pgf'}), plt.style.context(self.style):
+        with plt.rc_context({'backend': self.backend}), \
+                plt.style.context(self.style):
             self._plot_meta(bland_altman_plot, 'Bland-Altman', title=title)
 
     def ecdf_plot(self, title=None):
-        with plt.rc_context({'backend': 'pgf'}), plt.style.context(self.style):
+        with plt.rc_context({'backend': self.backend}), \
+                plt.style.context(self.style):
             self._plot_meta(ecdf_plot, 'eCDF', title=title)
 
     def lin_reg_plot(self, title=None):
-        with plt.rc_context({'backend': 'pgf'}), plt.style.context(self.style):
+        with plt.rc_context({'backend': self.backend}), \
+                plt.style.context(self.style):
             self._plot_meta(lin_reg_plot, 'Linear Regression', title=title)
 
     def save_plots(self, path):
-        for technique, var_combos in self.plots.items():
-            for vars, figures in var_combos.items():
-                for plot_type, fig in figures.items():
-                    plot_path = pathlib.Path(
-                            f'{path}/{technique}/{plot_type}'
-                            )
-                    plot_path.mkdir(parents=True, exist_ok=True)
-                    fig.savefig(plot_path / f'{vars}.png')
-                    fig.savefig(plot_path / f'{vars}.pgf')
-                    plt.close(fig)
+        for technique, scaling_methods in self.plots.items():
+            for scaling_method, var_combos in scaling_methods.items():
+                for vars, figures in var_combos.items():
+                    for plot_type, fig in figures.items():
+                        plot_path = pathlib.Path(
+                                f'{path}/{technique}/{plot_type}'
+                                )
+                        plot_path.mkdir(parents=True, exist_ok=True)
+                        fig.savefig(plot_path / f'{scaling_method} {vars}.png')
+                        fig.savefig(plot_path / f'{scaling_method} {vars}.pgf')
+                        plt.close(fig)
 
 
 def ecdf(data):
