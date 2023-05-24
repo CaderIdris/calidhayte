@@ -5,7 +5,9 @@ from matplotlib import get_backend
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import shap
 from sklearn.pipeline import Pipeline
+
 
 class Graphs:
     """Calculates errors between "true" and "predicted" measurements, plots
