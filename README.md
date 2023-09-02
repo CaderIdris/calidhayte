@@ -66,6 +66,7 @@ Please see [requirements.txt](./requirements.txt).
 This module requires two dataframes as a prerequisite. 
 
 **Independent Measurements**
+
 ||x|a|b|c|d|e|
 |---|---|---|---|---|---|---|
 |2022-01-01|0.1|0|7|2.2|3|5|
@@ -75,6 +76,7 @@ This module requires two dataframes as a prerequisite.
 |2022-09-30|0.5|3|1|2.7|4|0|
 
 **Dependent Measurements**
+
 ||x|
 |---|---|
 |2022-01-02|1|

@@ -1,12 +1,11 @@
-""" Contains classes and methods used to perform different methods of linear
-regression
+""" Contains code used to perform a range of univariate and multivariate
+regressions on provided data.
 
-This module is used to perform different methods of linear regression on a
-dataset (or a training subset), determine all coefficients and then calculate
-a range of errors (using the testing subset if available).
+Acts as a wrapper for scikit-learn [^skl], XGBoost [^xgb] and PyMC (via Bambi) [^pmc]
 
-    Classes:
-        Calibration: Calibrates one set of measurements against another
+[^skl]: https://scikit-learn.org/stable/modules/classes.html
+[^xgb]: https://xgboost.readthedocs.io/en/stable/python/python_api.html
+[^pmc]: https://bambinos.github.io/bambi/api/
 """
 
 from copy import deepcopy as dc
@@ -31,8 +30,8 @@ from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
 import xgboost as xgb
 
-logger = logging.getLogger("pymc")
-logger.setLevel(logging.ERROR)
+_logger = logging.getLogger("pymc")
+_logger.setLevel(logging.ERROR)
 
 
 def cont_strat_folds(
@@ -41,32 +40,33 @@ def cont_strat_folds(
         splits: int = 5,
         strat_groups: int = 5,
         seed: int = 62
-        ):
+        ) -> pd.DataFrame:
     """
-    Creates stratified k-folds on continuous variable
+    Creates stratified k-folds on continuous variable.
+    Based off of work by tolgadincer [^kaggle].
+
+    [^kaggle]:
+    www.kaggle.com/code/tolgadincer/continuous-target-stratification/notebook
 
     Parameters
     ----------
     y_df : pd.DataFrame
-        Target data to stratify on
+        Target data to stratify on.
     target_var : str
-        Target feature name
-    splits : int, optional
-        Number of folds to make
-        Default is 5
-    strat_groups : int, optional
-        Number of groups to split data in to for stratification
-        Default is 10
-    seed : int, optional
-        Random state to use, default is 62
+        Target feature name.
+    splits : int, default=5
+        Number of folds to make.
+    strat_groups : int, default=10
+        Number of groups to split data in to for stratification.
+    seed : int, default=62
+        Random state to use.
 
     Returns
     -------
-        y_df with added Fold column, specifying which test data fold
-        variable corresponds to
+    pd.DataFrame
+        `y_df` with added 'Fold' column, specifying which test data fold
+        variable corresponds to.
 
-    Based off of
-    www.kaggle.com/code/tolgadincer/continuous-target-stratification/notebook
     """
     y_df['Fold'] = -1
     skf = StratifiedKFold(
@@ -88,14 +88,12 @@ def cont_strat_folds(
 
 class Calibrate:
     """
-    Calibrate x against y using a range of methods
-    ```
+    Calibrate x against y using a range of different methods provided by
+    scikit-learn[^skl], xgboost[^xgb] and PyMC (via Bambi)[^pmc].
 
-    Attributes
-    ----------
-
-    Methods
-    -------
+    [^skl]: https://scikit-learn.org/stable/modules/classes.html
+    [^xgb]: https://xgboost.readthedocs.io/en/stable/python/python_api.html
+    [^pmc]: https://bambinos.github.io/bambi/api/
     """
 
     def __init__(
@@ -107,31 +105,40 @@ class Calibrate:
             strat_groups: int = 10,
             seed: int = 62
                  ):
-        """Initialises the calibration class
+        """Initialises class
 
-        This class is used to compare one set of measurements against another.
-        It also has the capability to perform multivariate calibrations when
-        secondary variables are provided.
+        Used to compare one set of measurements against another.
+        It can perform both univariate and multivariate regression, though
+        some techniques can only do one or the other. Multivariate regression
+        can only be performed when secondary variables are provided.
 
         Parameters
         ----------
         x_data : pd.DataFrame
-            Data to calibrate
+            Data to be calibrated.
         y_data : pd.DataFrame
-            'True' data to calibrate against
+            'True' data to calibrate against.
         target : str
-            Name of feature to calibrate, must be present in x and y
-        folds : int, optional
-            Number of fold, default is 5
-        strat_groups : int, optional
-            Number of groups to stratify against, default is 10
-        seed : int, optional
-            random state, default is 62
+            Column name of the primary feature to use in calibration, must be
+            the name of a column in both `x_data` and `y_data`.
+        folds : int, default=5
+            Number of folds to split the data into, using stratified k-fold.
+        strat_groups : int, default=10
+            Number of groups to stratify against, the data will be split into
+            n equally sized bins where n is the value of `strat_groups`.
+        seed : int, default=62
+            Random state to use when shuffling and splitting the data into n
+            folds. Ensures repeatability.
+
+        Raises
+        ------
+        ValueError
+            Raised if the target variables (e.g. 'NO2') is not a column name in
+            both dataframes.
         """
         if target not in x_data.columns or target not in y_data.columns:
             raise ValueError(
-                    f"{target} does not exist in both columns,"
-                    f" skipping comparison."
+                    f"{target} does not exist in both columns."
                              )
         join_index = x_data.join(
                 y_data,
@@ -139,8 +146,19 @@ class Calibrate:
                 lsuffix='x',
                 rsuffix='y'
                 ).dropna().index
-        self.x_data = x_data.loc[join_index, :]
-        self.target = target
+        """
+        The common indices between `x_data` and `y_data`, excluding missing
+        values
+        """
+        self.x_data: pd.DataFrame = x_data.loc[join_index, :]
+        """
+        The data to be calibrated.
+        """
+        self.target: str = target
+        """
+        The name of the column in both `x_data` and `y_data` that
+        will be used as the x and y variables in the calibration.
+        """
         self.y_data = cont_strat_folds(
                 y_data.loc[join_index, :],
                 target,
@@ -148,11 +166,56 @@ class Calibrate:
                 strat_groups,
                 seed
                 )
+        """
+        The data that `x_data` will be calibrated against. A '*Fold*'
+        column is added using the `const_strat_folds` function which splits
+        the data into k stratified folds (where k is the value of
+        `folds`). It splits the continuous measurements into n bins (where n
+        is the value of `strat_groups`) and distributes each bin equally
+        across all folds. This significantly reduces the chances of one fold
+        containing a skewed distribution relative to the whole dataset.
+        """
         self.models: dict[str,  # Technique name
                           dict[str,  # Scaling technique
                                dict[str,  # Variable combo
                                     dict[int,  # Fold
                                          Pipeline]]]] = dict()
+        """
+        The calibrated models. They are stored in a nested structure as
+        follows:
+        1. Primary Key, name of the technique (e.g Lasso Regression).
+        2. Scaling technique (e.g Yeo-Johnson Transform).
+        3. Combination of variables used or `target` if calibration is
+        univariate (e.g "`target` + a + b).
+        4. Fold, which fold was used excluded from the calibration. If data
+        if 5-fold cross validated, a key of 4 indicates the data was trained on
+        folds 0-3.
+
+        ```mermaid
+            stateDiagram-v2
+              models --> Technique
+              state Technique {
+                [*] --> Scaling
+                [*]: The calibration technique used
+                [*]: (e.g "Lasso Regression")
+                state Scaling {
+                  [*] --> Variables
+                  [*]: The scaling technique used
+                  [*]: (e.g "Yeo-Johnson Transform")
+                  state Variables {
+                    [*] : The combination of variables used
+                    [*] : (e.g "x + a + b")
+                    [*] --> Fold
+                    state Fold {
+                     [*] : Which fold was excluded from training data
+                     [*] : (e.g 4 indicates folds 0-3 were used to train)
+                    }
+                  }
+                }
+              }
+        ```
+
+        """
 
     def _sklearn_regression_meta(
             self,
@@ -177,15 +240,19 @@ class Calibrate:
 
         Parameters
         ----------
-        reg : sklearn classifier
-            Classifier to use
+        reg : sklearn.base.RegressorMixin
+            Classifier to use.
         name : str
-            Name of classification technique to save pipeline to
-        min_coeffs : int, optional
-            Minimum number of coefficients for technique, default is 1
-        max_coeffs : int, optional
-            Maximum number of coefficients for technique, default is max int
-            size
+            Name of classification technique to save pipeline to.
+        min_coeffs : int, default=1
+            Minimum number of coefficients for technique.
+        max_coeffs : int, default=(sys.maxsize * 2) + 1
+            Maximum number of coefficients for technique.
+
+        Raises
+        ------
+        NotImplementedError
+            PyMC currently doesn't work, TODO
         """
         scalers: dict[str, Any] = {
                 'None': None,
@@ -203,16 +270,27 @@ class Calibrate:
                     )
                 }
         x_secondary_cols = self.x_data.drop(self.target, axis=1).columns
+        # All columns in x_data that aren't the target variable
         products = [[np.nan, col] for col in x_secondary_cols]
         secondary_vals = pd.MultiIndex.from_product(products)
+        # Get all possible combinations of secondary variables in a pandas
+        # MultiIndex
         if self.models.get(name) is None:
             self.models[name] = dict()
+            # If the classification technique hasn't been used yet,
+            # add its key to the models dictionary
         if self.models[name].get(scaler) is None:
             self.models[name][scaler] = dict()
+            # If the scaling technique hasn't been used with the classification
+            # technique yet, add its key to the nested dictionary
         for sec_vals in secondary_vals:
+            # Loop over all combinations of secondary values
             vals = [self.target] + [v for v in sec_vals if v == v]
             vals_str = ' + '.join(vals)
             if len(vals) < min_coeffs or len(vals) > max_coeffs:
+                # Skip if number of coeffs doesn't lie within acceptable range
+                # for technique. For example, isotonic regression
+                # only works with one variable
                 continue
             self.models[name][scaler][vals_str] = dict()
             for fold in self.y_data.loc[:, 'Fold'].unique():
@@ -220,6 +298,15 @@ class Calibrate:
                         self.y_data.loc[:, 'Fold'] != fold
                         ]
                 if reg in ['t', 'gaussian']:
+                    # If using PyMC bayesian model,
+                    # format data and build model using bambi
+                    # then store result in pipeline
+                    # Currently doesn't work as PyMC models
+                    # can't be pickled, so don't function with deepcopy. Needs
+                    # looking into
+                    raise NotImplementedError(
+                        "PyMC functions currently don't work with deepcopy"
+                    )
                     sc = scalers[scaler]
                     if sc is not None:
                         x_data = sc.fit_transform(
@@ -242,6 +329,8 @@ class Calibrate:
                         ("Regression", model)
                         ])
                 else:
+                    # If using scikit-learn API compatible classifier,
+                    # Build pipeline and fit to 
                     pipeline = Pipeline([
                         ("Selector", ColumnTransformer([
                                 ("selector", "passthrough", vals)
@@ -257,16 +346,17 @@ class Calibrate:
                 self.models[name][scaler][vals_str][fold] = dc(pipeline)
 
     def pymc_bayesian(
-            self,
-            family: Literal[
-                "Gaussian",
-                "Student T",
-                ] = "Gaussian",
-            name: str = " PyMC Bayesian",
-            **kwargs
-            ):
-        """Performs bayesian linear regression (either uni or multivariate)
-        fitting x on y
+        self,
+        family: Literal[
+            "Gaussian",
+            "Student T",
+        ] = "Gaussian",
+        name: str = " PyMC Bayesian",
+        **kwargs
+        ):
+        """
+        Performs bayesian linear regression (either uni or multivariate)
+        fitting x on y.
 
         Performs bayesian linear regression, both univariate and multivariate,
         on X against y. More details can be found at:
@@ -275,11 +365,10 @@ class Calibrate:
 
         Parameters
         ----------
-        family : Literal["Gaussian", "Student T"], optional
+        family : {'Gaussian', 'Student T'}, default='Gaussian'
             Statistical distribution to fit measurements to. Options are:
                 - Gaussian
                 - Student T
-            Default is "Gaussian"
         """
         # Define model families
         model_families = {
@@ -290,7 +379,7 @@ class Calibrate:
                 model_families[family],
                 f'{name} ({model_families})',
                 **kwargs
-                )
+        )
 
     def linreg(self, name: str = "Linear Regression", **kwargs):
         """
@@ -298,8 +387,8 @@ class Calibrate:
 
         Parameters
         ----------
-        name : str, optional
-            Name of classification technique, default is Linear Regression
+        name : str, default="Linear Regression"
+            Name of classification technique.
         """
         self._sklearn_regression_meta(
                 lm.LinearRegression(**kwargs),
@@ -312,8 +401,8 @@ class Calibrate:
 
         Parameters
         ----------
-        name : str, optional
-            Name of classification technique, default is Ridge Regression
+        name : str, default="Ridge Regression"
+            Name of classification technique
         """
         self._sklearn_regression_meta(
                 lm.Ridge(**kwargs),
@@ -330,9 +419,8 @@ class Calibrate:
 
         Parameters
         ----------
-        name : str, optional
-            Name of classification technique, default is Ridge Regression
-            (Cross Validated)
+        name : str, default="Ridge Regression (Cross Validated)"
+            Name of classification technique
         """
         self._sklearn_regression_meta(
                 lm.RidgeCV(**kwargs),
@@ -345,8 +433,8 @@ class Calibrate:
 
         Parameters
         ----------
-        name : str, optional
-            Name of classification technique, default is Lasso Regression
+        name : str, default="Lasso Regression"
+            Name of classification technique
         """
         self._sklearn_regression_meta(
                 lm.Lasso(**kwargs),
@@ -363,9 +451,8 @@ class Calibrate:
 
         Parameters
         ----------
-        name : str, optional
-            Name of classification technique, default is Lasso Regression
-            (Cross Validated)
+        name : str, default="Lasso Regression (Cross Validated)"
+            Name of classification technique
         """
         self._sklearn_regression_meta(
                 lm.LassoCV(**kwargs),
@@ -382,9 +469,8 @@ class Calibrate:
 
         Parameters
         ----------
-        name : str, optional
-            Name of classification technique, default is Multi-task Lasso
-            Regression
+        name : str, default="Multi-task Lasso Regression"
+            Name of classification technique
         """
         self._sklearn_regression_meta(
                 lm.MultiTaskLasso(**kwargs),
@@ -401,9 +487,8 @@ class Calibrate:
 
         Parameters
         ----------
-        name : str, optional
-            Name of classification technique, default is Multi-task Lasso
-            Regression (Cross Validated)
+        name : str, default="Multi-task Lasso Regression (Cross Validated)"
+            Name of classification technique
         """
         self._sklearn_regression_meta(
                 lm.MultiTaskLassoCV(**kwargs),
@@ -416,9 +501,8 @@ class Calibrate:
 
         Parameters
         ----------
-        name : str, optional
-            Name of classification technique, default is Multi-task Lasso
-            Regression
+        name : str, default="Elastic Net Regression"
+            Name of classification technique
         """
         self._sklearn_regression_meta(
                 lm.ElasticNet(**kwargs),
@@ -435,9 +519,8 @@ class Calibrate:
 
         Parameters
         ----------
-        name : str, optional
-            Name of classification technique, default is Elastic Net
-            Regression (Cross Validated)
+        name : str, default="Elastic Net Regression (Cross Validated)"
+            Name of classification technique
         """
         self._sklearn_regression_meta(
                 lm.ElasticNetCV(**kwargs),
@@ -454,9 +537,8 @@ class Calibrate:
 
         Parameters
         ----------
-        name : str, optional
-            Name of classification technique, default is Multi-task
-            Elastic Net Regression
+        name : str, default="Multi-task Elastic Net Regression"
+            Name of classification technique
         """
         self._sklearn_regression_meta(
                 lm.MultiTaskElasticNet(**kwargs),
@@ -473,9 +555,9 @@ class Calibrate:
 
         Parameters
         ----------
-        name : str, optional
-            Name of classification technique, default is Multi-task Elastic Net
-            Regression (Cross Validated)
+        name : str, default="Multi-Task Elastic Net Regression\
+        (Cross Validated)"
+            Name of classification technique
         """
         self._sklearn_regression_meta(
                 lm.MultiTaskElasticNetCV(**kwargs),
@@ -488,8 +570,8 @@ class Calibrate:
 
         Parameters
         ----------
-        name : str, optional
-            Name of classification technique, default is Least Angle Regression
+        name : str, default="Least Angle Regression"
+            Name of classification technique.
         """
         self._sklearn_regression_meta(
                 lm.Lars(**kwargs),
@@ -506,9 +588,8 @@ class Calibrate:
 
         Parameters
         ----------
-        name : str, optional
-            Name of classification technique, default is Least Angle Regression
-            (Lasso)
+        name : str, default="Least Angle Regression (Lasso)"
+            Name of classification technique
         """
         self._sklearn_regression_meta(
                 lm.LassoLars(**kwargs),
@@ -521,9 +602,8 @@ class Calibrate:
 
         Parameters
         ----------
-        name : str, optional
-            Name of classification technique, default is Orthogonal Matching
-            Pursuit
+        name : str, default="Orthogonal Matching Pursuit"
+            Name of classification technique
         """
         self._sklearn_regression_meta(
                 lm.OrthogonalMatchingPursuit(**kwargs),
@@ -537,9 +617,8 @@ class Calibrate:
 
         Parameters
         ----------
-        name : str, optional
-            Name of classification technique, default is Bayesian Ridge
-            Regression
+        name : str, default="Bayesian Ridge Regression"
+            Name of classification technique.
         """
         self._sklearn_regression_meta(
                 lm.BayesianRidge(**kwargs),
@@ -556,9 +635,8 @@ class Calibrate:
 
         Parameters
         ----------
-        name : str, optional
-            Name of classification technique, default is Bayesian Automatic
-            Relevance Detection
+        name : str, default="Bayesian Automatic Relevance Detection"
+            Name of classification technique.
         """
         self._sklearn_regression_meta(
                 lm.ARDRegression(**kwargs),
@@ -571,8 +649,8 @@ class Calibrate:
 
         Parameters
         ----------
-        name : str, optional
-            Name of classification technique, default is Tweedie Regression
+        name : str, default="Tweedie Regression"
+            Name of classification technique.
         """
         self._sklearn_regression_meta(
                 lm.TweedieRegressor(**kwargs),
@@ -589,9 +667,8 @@ class Calibrate:
 
         Parameters
         ----------
-        name : str, optional
-            Name of classification technique, default is Stochastic Gradient
-            Descent
+        name : str, default="Stochastic Gradient Descent"
+            Name of classification technique.
         """
         self._sklearn_regression_meta(
                 lm.SGDRegressor(**kwargs),
@@ -608,9 +685,8 @@ class Calibrate:
 
         Parameters
         ----------
-        name : str, optional
-            Name of classification technique, default is Passive Aggressive
-            Regression
+        name : str, default="Passive Agressive Regression"
+            Name of classification technique.
         """
         self._sklearn_regression_meta(
                 lm.PassiveAggressiveRegressor(**kwargs),
@@ -623,8 +699,8 @@ class Calibrate:
 
         Parameters
         ----------
-        name : str, optional
-            Name of classification technique, default is RANSAC
+        name : str, default="RANSAC"
+            Name of classification technique.
         """
         self._sklearn_regression_meta(
                 lm.RANSACRegressor(**kwargs),
@@ -637,8 +713,9 @@ class Calibrate:
 
         Parameters
         ----------
-        name : str, optional
-            Name of classification technique, default is Theil-Sen Regression
+        name : str, default="Theil-Sen Regression"
+            Name of classification technique.
+        -Sen Regression
         """
         self._sklearn_regression_meta(
                 lm.TheilSenRegressor(**kwargs),
@@ -651,8 +728,8 @@ class Calibrate:
 
         Parameters
         ----------
-        name : str, optional
-            Name of classification technique, default is Huber Regression
+        name : str, default="Huber Regression"
+            Name of classification technique.
         """
         self._sklearn_regression_meta(
                 lm.HuberRegressor(**kwargs),
@@ -665,8 +742,8 @@ class Calibrate:
 
         Parameters
         ----------
-        name : str, optional
-            Name of classification technique, default is Quantile Regression
+        name : str, default="Quantile Regression"
+            Name of classification technique.
         """
         self._sklearn_regression_meta(
                 lm.QuantileRegressor(**kwargs),
@@ -679,8 +756,8 @@ class Calibrate:
 
         Parameters
         ----------
-        name : str, optional
-            Name of classification technique, default is Decision Tree
+        name : str, default="Decision Tree"
+            Name of classification technique.
         """
         self._sklearn_regression_meta(
                 tree.DecisionTreeRegressor(**kwargs),
@@ -693,8 +770,8 @@ class Calibrate:
 
         Parameters
         ----------
-        name : str, optional
-            Name of classification technique, default is Extra Tree
+        name : str, default="Extra Tree"
+            Name of classification technique.
         """
         self._sklearn_regression_meta(
                 tree.ExtraTreeRegressor(**kwargs),
@@ -707,8 +784,8 @@ class Calibrate:
 
         Parameters
         ----------
-        name : str, optional
-            Name of classification technique, default is Random Forest
+        name : str, default="Random Forest"
+            Name of classification technique.
         """
         self._sklearn_regression_meta(
                 en.RandomForestRegressor(**kwargs),
@@ -725,8 +802,8 @@ class Calibrate:
 
         Parameters
         ----------
-        name : str, optional
-            Name of classification technique, default is Extra Trees Ensemble
+        name : str, default="Extra Trees Ensemble"
+            Name of classification technique.
         """
         self._sklearn_regression_meta(
                 en.ExtraTreesRegressor(**kwargs),
@@ -743,9 +820,8 @@ class Calibrate:
 
         Parameters
         ----------
-        name : str, optional
-            Name of classification technique, default is Gradient Boosting
-            Regression
+        name : str, default="Gradient Boosting Regression"
+            Name of classification technique.
         """
         self._sklearn_regression_meta(
                 en.GradientBoostingRegressor(**kwargs),
@@ -762,8 +838,9 @@ class Calibrate:
 
         Parameters
         ----------
-        name : str, optional
-            Name of classification technique, default is Histogram-Based
+        name : str, default="Histogram-Based Gradient Boosting Regression"
+            Name of classification technique.
+        -Based
             Gradient Boosting Regression
         """
         self._sklearn_regression_meta(
@@ -781,8 +858,9 @@ class Calibrate:
 
         Parameters
         ----------
-        name : str, optional
-            Name of classification technique, default is Multi-Layer Perceptron
+        name : str, default="Multi-Layer Perceptron Regression"
+            Name of classification technique.
+        -Layer Perceptron
             Regression
         """
         self._sklearn_regression_meta(
@@ -796,9 +874,8 @@ class Calibrate:
 
         Parameters
         ----------
-        name : str, optional
-            Name of classification technique, default is Support Vector
-            Regression
+        name : str, default="Support Vector Regression"
+            Name of classification technique.
         """
         self._sklearn_regression_meta(
                 svm.SVR(**kwargs),
@@ -815,9 +892,8 @@ class Calibrate:
 
         Parameters
         ----------
-        name : str, optional
-            Name of classification technique, default is Linear Support Vector
-            Regression
+        name : str, default="Linear Support Vector Regression"
+            Name of classification technique.
         """
         self._sklearn_regression_meta(
                 svm.LinearSVR(**kwargs),
@@ -830,8 +906,9 @@ class Calibrate:
 
         Parameters
         ----------
-        name : str, optional
-            Name of classification technique, default is Nu-Support Vector
+        name : str, default="Nu-Support Vector Regression"
+            Name of classification technique.
+        -Support Vector
             Regression
         """
         self._sklearn_regression_meta(
@@ -849,9 +926,8 @@ class Calibrate:
 
         Parameters
         ----------
-        name : str, optional
-            Name of classification technique, default is Gaussian Process
-            Regression
+        name : str, default="Gaussian Process Regression"
+            Name of classification technique.
         """
         self._sklearn_regression_meta(
                 gp.GaussianProcessRegressor(**kwargs),
@@ -864,8 +940,8 @@ class Calibrate:
 
         Parameters
         ----------
-        name : str, optional
-            Name of classification technique, default is PLS Regression
+        name : str, default="PLS Regression"
+            Name of classification technique.
         """
         self._sklearn_regression_meta(
                 cd.PLSRegression(n_components=1, **kwargs),
@@ -878,8 +954,8 @@ class Calibrate:
 
         Parameters
         ----------
-        name : str, optional
-            Name of classification technique, default is Isotonic Regression
+        name : str, default="Isotonic Regression"
+            Name of classification technique.
         """
         self._sklearn_regression_meta(
                 iso.IsotonicRegression(**kwargs),
@@ -893,8 +969,8 @@ class Calibrate:
 
         Parameters
         ----------
-        name : str, optional
-            Name of classification technique, default is XGBoost Regression
+        name : str, default="XGBoost Regression"
+            Name of classification technique.
         """
         self._sklearn_regression_meta(
                 xgb.XGBRegressor(**kwargs),
@@ -911,9 +987,8 @@ class Calibrate:
 
         Parameters
         ----------
-        name : str, optional
-            Name of classification technique, default is XGBoost Random Forest
-            Regression
+        name : str, default="XGBoost Random Forest Regression"
+            Name of classification technique.
         """
         self._sklearn_regression_meta(
                 xgb.XGBRFRegressor(**kwargs),
@@ -921,6 +996,21 @@ class Calibrate:
                 )
 
     def return_measurements(self) -> dict[str, pd.DataFrame]:
+        """
+        Returns the measurements used, with missing values and
+        non-overlapping measurements excluded
+
+        Returns
+        -------
+        dict[str, pd.DataFrame]
+            Dictionary with 2 keys:
+
+            |Key|Value|
+            |---|---|
+            |x|`x_data`|
+            |y|`y_data`|
+
+        """
         return {
                 'x': self.x_data,
                 'y': self.y_data
@@ -931,4 +1021,21 @@ class Calibrate:
                                          dict[str,  # Variables used
                                               dict[int,  # Fold
                                                    Pipeline]]]]:
+        """
+        Returns the models stored in the object
+
+        Returns
+        -------
+        dict[str, str, str, int, Pipeline]
+            The calibrated models. They are stored in a nested structure as
+            follows:
+            1. Primary Key, name of the technique (e.g Lasso Regression).
+            2. Scaling technique (e.g Yeo-Johnson Transform).
+            3. Combination of variables used or `target` if calibration is
+            univariate (e.g "`target` + a + b).
+            4. Fold, which fold was used excluded from the calibration. If data
+            folds 0-3.
+            if 5-fold cross validated, a key of 4 indicates the data was
+            trained on
+        """
         return self.models
