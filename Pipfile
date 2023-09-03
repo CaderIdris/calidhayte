@@ -8,13 +8,20 @@ numpy = "*"
 pandas = "*"
 scikit-learn = "*"
 bambi = "*"
-pdoc = "*"
 shap = "*"
 calidhayte = {file = "."}
 xgboost = "*"
 matplotlib = "*"
 
 [dev-packages]
+tox = "*"
+tox-pipenv = "*"
+pytest = "*"
+flake8 = "*"
+mypy = "*"
+pdoc = "*"
+pytest-cov = "*"
+pytest-html = "*"
 
 [requires]
 python_version = "3.11"

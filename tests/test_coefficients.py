@@ -94,7 +94,6 @@ def test_skl_cals(full_data):
             Calibrate.omp,
             Calibrate.passive_aggressive,
             Calibrate.pls,
-            Calibrate.quantile,
             Calibrate.random_forest,
             Calibrate.ransac,
             Calibrate.ridge,

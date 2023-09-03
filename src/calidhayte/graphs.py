@@ -1,5 +1,6 @@
+from collections.abc import Iterable
 import pathlib
-from typing import Any, Optional
+from typing import Any, Literal, Optional, Union
 
 from matplotlib import get_backend
 import matplotlib.pyplot as plt
@@ -12,11 +13,6 @@ from sklearn.pipeline import Pipeline
 class Graphs:
     """Calculates errors between "true" and "predicted" measurements, plots
     graphs and returns all results
-
-    Attributes:
-
-    Methods:
-        save_plots: Saves all plots in pgf format
     """
 
     def __init__(
@@ -97,7 +93,14 @@ class Graphs:
                 plt.style.context(self.style):
             self._plot_meta(lin_reg_plot, 'Linear Regression', title=title)
 
-    def save_plots(self, path):
+    def save_plots(
+        self,
+        path: str,
+        filetype: Union[
+           Literal['png', 'pgf', 'pdf'],
+           Iterable[Literal['png', 'pgf', 'pdf']]
+        ] = 'png'
+        ):
         for technique, scaling_methods in self.plots.items():
             for scaling_method, var_combos in scaling_methods.items():
                 for vars, figures in var_combos.items():
@@ -106,8 +109,11 @@ class Graphs:
                                 f'{path}/{technique}/{plot_type}'
                                 )
                         plot_path.mkdir(parents=True, exist_ok=True)
-                        fig.savefig(plot_path / f'{scaling_method} {vars}.png')
-                        fig.savefig(plot_path / f'{scaling_method} {vars}.pgf')
+                        if isinstance(filetype, str):
+                            fig.savefig(plot_path / f'{scaling_method} {vars}.{filetype}')
+                        elif isinstance(filetype, Iterable):
+                            for ftype in filetype:
+                                fig.savefig(plot_path / f'{scaling_method} {vars}.{ftype}')
                         plt.close(fig)
 
 

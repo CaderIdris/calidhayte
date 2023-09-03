@@ -1,7 +1,8 @@
 """ Contains code used to perform a range of univariate and multivariate
 regressions on provided data.
 
-Acts as a wrapper for scikit-learn [^skl], XGBoost [^xgb] and PyMC (via Bambi) [^pmc]
+Acts as a wrapper for scikit-learn [^skl], XGBoost [^xgb] and PyMC (via Bambi)
+[^pmc]
 
 [^skl]: https://scikit-learn.org/stable/modules/classes.html
 [^xgb]: https://xgboost.readthedocs.io/en/stable/python/python_api.html
@@ -307,30 +308,30 @@ class Calibrate:
                     raise NotImplementedError(
                         "PyMC functions currently don't work with deepcopy"
                     )
-                    sc = scalers[scaler]
-                    if sc is not None:
-                        x_data = sc.fit_transform(
-                                self.x_data.loc[y_data.index, :]
-                                )
-                    else:
-                        x_data = self.x_data.loc[y_data.index, :]
-                    x_data['y'] = y_data.loc[:, self.target]
-                    model = bmb.Model(
-                            f"y ~ {vals_str}",
-                            x_data,
-                            family=reg
-                            )
-                    _ = model.fit(
-                        progressbar=False,
-                        **kwargs
-                        )
-                    pipeline = Pipeline([
-                        ("Scaler", scaler),
-                        ("Regression", model)
-                        ])
+#                    sc = scalers[scaler]
+#                    if sc is not None:
+#                        x_data = sc.fit_transform(
+#                                self.x_data.loc[y_data.index, :]
+#                                )
+#                    else:
+#                        x_data = self.x_data.loc[y_data.index, :]
+#                    x_data['y'] = y_data.loc[:, self.target]
+#                    model = bmb.Model(
+#                            f"y ~ {vals_str}",
+#                            x_data,
+#                            family=reg
+#                            )
+#                    _ = model.fit(
+#                        progressbar=False,
+#                        **kwargs
+#                        )
+#                    pipeline = Pipeline([
+#                        ("Scaler", scaler),
+#                        ("Regression", model)
+#                        ])
                 else:
                     # If using scikit-learn API compatible classifier,
-                    # Build pipeline and fit to 
+                    # Build pipeline and fit to
                     pipeline = Pipeline([
                         ("Selector", ColumnTransformer([
                                 ("selector", "passthrough", vals)
@@ -346,14 +347,14 @@ class Calibrate:
                 self.models[name][scaler][vals_str][fold] = dc(pipeline)
 
     def pymc_bayesian(
-        self,
-        family: Literal[
-            "Gaussian",
-            "Student T",
-        ] = "Gaussian",
-        name: str = " PyMC Bayesian",
-        **kwargs
-        ):
+            self,
+            family: Literal[
+                "Gaussian",
+                "Student T",
+            ] = "Gaussian",
+            name: str = " PyMC Bayesian",
+            **kwargs
+            ):
         """
         Performs bayesian linear regression (either uni or multivariate)
         fitting x on y.
