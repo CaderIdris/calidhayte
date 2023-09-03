@@ -5,7 +5,6 @@
 **/.~lock.*
 .mypy_cache/
 .tox/
-.coverage
-report.html
 build/*
 .tmp/*
+reports/

@@ -42,13 +42,13 @@ It can then performs multiple error calculations to validate them, as well as pr
 **pip**
 
 ```bash
-pip install git+https://github.com/CaderIdris/calidhayte@{release_tag}
+pip install git+https://github.com/CaderIdris/calidhayte@release_tag
 ```
 
 **conda**
 ```bash
 conda install git pip
-pip install git+https://github.com/CaderIdris/calidhayte@{release_tag} 
+pip install git+https://github.com/CaderIdris/calidhayte@release_tag 
 ```
 
 The release tags can be found in the sidebar
@@ -57,7 +57,7 @@ The release tags can be found in the sidebar
 
 ## Dependencies
 
-Please see [requirements.txt](./requirements.txt).
+Please see [Pipfile](./Pipfile).
 
 ---
 

@@ -1,69 +1,124 @@
-from typing import Any
+"""
+Determine the performance of different calibration techniques using a range of
+different metrics.
+
+Acts as a wrapper for scikit-learn performance metrics [^skl].
+
+[^skl]: https://scikit-learn.org/stable/modules/classes.html
+"""
+
+from typing import Any, TypeAlias
 
 import pandas as pd
 from sklearn import metrics as met
 from sklearn.pipeline import Pipeline
 
+CoefficientPipelineDict: TypeAlias = dict[str,  # Technique name
+                                          dict[str,  # Scaling technique
+                                               dict[str,  # Variable combo
+                                                    dict[int,  # Fold
+                                                         Pipeline]]]]
+"""
+Type alias for the nested dictionaries that the models are stored in
+"""
+
 
 class Results:
     """
+    Determine performance of models using a range of metrics.
 
-    Methods
-    -------
-    explained_variance_score()
-        Calculate the explained variance score
-        between the true (y) measurements and all predicted (x) measurements
-    max()
-        Calculate the max error between the true (y) measurements and all
-        predicted (x) measurements
-    mean_absolute()
-        Calculate the mean absolute error between the true (y)
-        measurements and all predicted (x) measurements
-    root_mean_squared()
-        Calculate the root mean squared error between the
-        true (y) measurements and all predicted (x) measurements
-    root_mean_squared_log()
-        Calculate the root_mean_squared_log error
-        between the true (y) measurements and all predicted (x) measurements
-    median_absolute()
-        Calculate the median absolute error between the true
-        (y) measurements and all predicted (x) measurements
-    mean_absolute_percentage()
-        Calculate the mean absolute percentage error
-        between the true (y) measurements and all predicted (x) measurements
-    r2()
-        Calculate the r2 score between the true (y) measurements and all
-        predicted (x) measurements
-    mean_poisson_deviance()
-        Calculate the mean poisson deviance between the
-        true (y) measurements and all predicted (x) measurements
-    mean_gamma_deviance()
-        Calculate the mean gamma deviance between the true
-        (y) measurements and all predicted (x) measurements
-    mean_tweedie_deviance()
-        Calculate the mean tweedie deviance between the
-        true (y) measurements and all predicted (x) measurements
-    mean_pinball_loss()
-        Calculate the mean pinball loss between the true
-        (y) measurements and all predicted (x) measurements
-    return_errors()
-        Returns dictionary of all recorded errors
+    Used to compare a range of different models that were fitted in the
+    Calibrate class in `coefficients.py`.
     """
 
     def __init__(
         self,
-        x: pd.DataFrame,
-        y: pd.DataFrame,
+        x_data: pd.DataFrame,
+        y_data: pd.DataFrame,
         target: str,
-        models: dict[str, dict[str, dict[str, dict[int, Pipeline]]]]
+        models: CoefficientPipelineDict
     ):
         """
+        Initialises the class
+
+        Parameters
+        ----------
+        x_data : pd.DataFrame
+            Dependent measurements
+        y_data : pd.DataFrame
+            Independent measurements
+        target : str
+            Column name of the primary feature to use in calibration, must be
+            the name of a column in both `x_data` and `y_data`.
+        models : CoefficientPipelineDict
+            The calibrated models.
         """
-        self.x = x
-        self.y = y
-        self.target = target
-        self.models = models
-        self._errors = pd.DataFrame()
+        if target not in x_data.columns or target not in y_data.columns:
+            not_in_x = target not in x_data.columns
+            not_in_y = target not in y_data.columns
+            raise ValueError(
+                f"{target} not in {'x' if not_in_x else ''}"
+                f"{' and ' if not_in_x and not_in_y else ''}"
+                f"{'y' if not_in_y else ''}"
+            )
+        self.x: pd.DataFrame = x_data
+        """Dependent measurements"""
+        self.y: pd.DataFrame = y_data
+        """Independent Measurements"""
+        self.target: str = target
+        """Column name of primary feature to use in calibration"""
+        self.models: CoefficientPipelineDict = models
+        """
+        They are stored in a nested structure as
+        follows:
+        1. Primary Key, name of the technique (e.g Lasso Regression).
+        2. Scaling technique (e.g Yeo-Johnson Transform).
+        3. Combination of variables used or `target` if calibration is
+        univariate (e.g "`target` + a + b).
+        4. Fold, which fold was used excluded from the calibration. If data
+        if 5-fold cross validated, a key of 4 indicates the data was
+        trained on folds 0-3.
+
+        ```mermaid
+            stateDiagram-v2
+              models --> Technique
+              state Technique {
+                [*] --> Scaling
+                [*]: The calibration technique used
+                [*]: (e.g "Lasso Regression")
+                state Scaling {
+                  [*] --> Variables
+                  [*]: The scaling technique used
+                  [*]: (e.g "Yeo-Johnson Transform")
+                  state Variables {
+                    [*] : The combination of variables used
+                    [*] : (e.g "x + a + b")
+                    [*] --> Fold
+                    state Fold {
+                     [*] : Which fold was excluded from training data
+                     [*] : (e.g 4 indicates folds 0-3 were used to train)
+                    }
+                  }
+                }
+              }
+        ```
+
+        """
+        self.errors: pd.DataFrame = pd.DataFrame()
+        """
+        Results of error metric valculations. Index increases sequentially
+        by 1, columns contain the technique, scaling method, variables and
+        fold for each row. It also contains a column for each metric.
+
+        ||Technique|Scaling Method|Variables|Fold|Explained Variance Score|...\
+        |Mean Absolute Percentage Error|
+        |---|---|---|---|---|---|---|---|
+        |0|Random Forest|Standard Scaling|x + a|0|0.95|...|0.05|
+        |1|Theil-Sen|Yeo-JohnsonScaling|x + a + b|1|0.98|...|0.01|
+        |...|...|...|...|...|...|...|...|
+        |55|Extra Trees|None|x|2|0.43|...|0.52|
+
+        """
 
     def _sklearn_error_meta(self, err: Any, name: str, **kwargs):
         """
@@ -79,22 +134,24 @@ class Results:
                         pred_raw = self.x.loc[true.index, :]
                         pred = pipe.predict(pred_raw)
                         error = err(true, pred, **kwargs)
-                        self._errors.loc[idx, 'Technique'] = technique
-                        self._errors.loc[
-                                idx, 'Scaling Method'
-                                ] = scaling_technique
-                        self._errors.loc[idx, 'Variables'] = vars
-                        self._errors.loc[idx, 'Fold'] = fold
-                        self._errors.loc[idx, name] = error
+                        if idx not in self.errors.index:
+                            self.errors.loc[idx, 'Technique'] = technique
+                            self.errors.loc[
+                                    idx, 'Scaling Method'
+                                    ] = scaling_technique
+                            self.errors.loc[idx, 'Variables'] = vars
+                            self.errors.loc[idx, 'Fold'] = fold
+                        self.errors.loc[idx, name] = error
                         idx = idx+1
 
     def explained_variance_score(self):
         """Calculate the explained variance score between the true values (y)
-        and predicted y (x)
+        and predicted y (x) [^tech].
 
-        This technique is explained in further detail at:
-        https://scikit-learn.org/stable/modules/generated/
-        sklearn.metrics.explained_variance_score
+        [^tech]: [Link](\
+        https://scikit-learn.org/stable/modules/generated/\
+sklearn.metrics.explained_variance_score\
+        )
         """
         self._sklearn_error_meta(
                 met.explained_variance_score,
@@ -103,11 +160,12 @@ class Results:
 
     def max(self):
         """Calculate the max error between the true values (y)
-        and predicted y (x)
+        and predicted y (x) [^tech].
 
-        This technique is explained in further detail at:
-        https://scikit-learn.org/stable/modules/generated/
-        sklearn.metrics.max_error
+        [^tech]: [Link](\
+        https://scikit-learn.org/stable/modules/generated/\
+sklearn.metrics.max_error\
+        )
         """
         self._sklearn_error_meta(
                 met.max_error,
@@ -116,11 +174,12 @@ class Results:
 
     def mean_absolute(self):
         """Calculate the mean absolute error between the true values (y)
-        and predicted y (x)
+        and predicted y (x) [^tech].
 
-        This technique is explained in further detail at:
-        https://scikit-learn.org/stable/modules/generated/
-        sklearn.metrics.mean_absolute_error
+        [^tech]: [Link](\
+        https://scikit-learn.org/stable/modules/generated/\
+sklearn.metrics.mean_absolute_error\
+        )
         """
         self._sklearn_error_meta(
                 met.mean_absolute_error,
@@ -129,11 +188,12 @@ class Results:
 
     def root_mean_squared(self):
         """Calculate the root mean squared error between the true values (y)
-        and predicted y (x)
+        and predicted y (x) [^tech].
 
-        This technique is explained in further detail at:
-        https://scikit-learn.org/stable/modules/generated/
-        sklearn.metrics.mean_squared_error
+        [^tech]: [Link](\
+        https://scikit-learn.org/stable/modules/generated/\
+sklearn.metrics.mean_squared_error\
+        )
         """
         self._sklearn_error_meta(
                 met.mean_squared_error,
@@ -142,12 +202,13 @@ class Results:
                 )
 
     def root_mean_squared_log(self):
-        """Calculate the root mean squared log error between the true values (y)
-        and predicted y (x)
+        """Calculate the root mean squared log error between the true values
+        (y) and predicted y (x) [^tech].
 
-        This technique is explained in further detail at:
-        https://scikit-learn.org/stable/modules/generated/
-        sklearn.metrics.mean_squared_log_error
+        [^tech]: [Link](\
+        https://scikit-learn.org/stable/modules/generated/\
+sklearn.metrics.mean_squared_log_error\
+        )
         """
         self._sklearn_error_meta(
                 met.mean_squared_log_error,
@@ -157,11 +218,12 @@ class Results:
 
     def median_absolute(self):
         """Calculate the median absolute error between the true values (y)
-        and predicted y (x)
+        and predicted y (x) [^tech].
 
-        This technique is explained in further detail at:
-        https://scikit-learn.org/stable/modules/generated/
-        sklearn.metrics.median_absolute_error
+        [^tech]: [Link](\
+        https://scikit-learn.org/stable/modules/generated/\
+sklearn.metrics.median_absolute_error\
+        )
         """
         self._sklearn_error_meta(
                 met.median_absolute_error,
@@ -170,11 +232,12 @@ class Results:
 
     def mean_absolute_percentage(self):
         """Calculate the mean absolute percentage error between the true
-        values (y) and predicted y (x)
+        values (y) and predicted y (x) [^tech].
 
-        This technique is explained in further detail at:
-        https://scikit-learn.org/stable/modules/generated/
-        sklearn.metrics.mean_absolute_percentage_error
+        [^tech]: [Link](\
+        https://scikit-learn.org/stable/modules/generated/\
+sklearn.metrics.mean_absolute_percentage_error\
+        )
         """
         self._sklearn_error_meta(
                 met.mean_absolute_percentage_error,
@@ -183,11 +246,12 @@ class Results:
 
     def r2(self):
         """Calculate the r2 between the true values (y)
-        and predicted y (x)
+        and predicted y (x) [^tech].
 
-        This technique is explained in further detail at:
-        https://scikit-learn.org/stable/modules/generated/
-        sklearn.metrics.r2_score
+        [^tech]: [Link](\
+        https://scikit-learn.org/stable/modules/generated/\
+sklearn.metrics.r2_score\
+        )
         """
         self._sklearn_error_meta(
                 met.r2_score,
@@ -196,11 +260,12 @@ class Results:
 
     def mean_poisson_deviance(self):
         """Calculate the mean poisson deviance between the true values (y)
-        and predicted y (x)
+        and predicted y (x) [^tech].
 
-        This technique is explained in further detail at:
-        https://scikit-learn.org/stable/modules/generated/
-        sklearn.metrics.mean_poisson_deviance
+        [^tech]: [Link](\
+        https://scikit-learn.org/stable/modules/generated/\
+sklearn.metrics.mean_poisson_deviance\
+        )
         """
         self._sklearn_error_meta(
                 met.mean_poisson_deviance,
@@ -209,11 +274,12 @@ class Results:
 
     def mean_gamma_deviance(self):
         """Calculate the mean gamma deviance between the true values (y)
-        and predicted y (x)
+        and predicted y (x) [^tech].
 
-        This technique is explained in further detail at:
-        https://scikit-learn.org/stable/modules/generated/
-        sklearn.metrics.mean_gamma_deviance
+        [^tech]: [Link](\
+        https://scikit-learn.org/stable/modules/generated/\
+sklearn.metrics.mean_gamma_deviance\
+        )
         """
         self._sklearn_error_meta(
                 met.mean_gamma_deviance,
@@ -222,11 +288,12 @@ class Results:
 
     def mean_tweedie_deviance(self):
         """Calculate the mean tweedie deviance between the true values (y)
-        and predicted y (x)
+        and predicted y (x) [^tech].
 
-        This technique is explained in further detail at:
-        https://scikit-learn.org/stable/modules/generated/
-        sklearn.metrics.mean_tweedie_deviance
+        [^tech]: [Link](\
+        https://scikit-learn.org/stable/modules/generated/\
+sklearn.metrics.mean_tweedie_deviance\
+        )
         """
         self._sklearn_error_meta(
                 met.mean_tweedie_deviance,
@@ -235,11 +302,12 @@ class Results:
 
     def mean_pinball_loss(self):
         """Calculate the mean pinball loss between the true values (y)
-        and predicted y (x)
+        predicted y (x) [^tech].
 
-        This technique is explained in further detail at:
-        https://scikit-learn.org/stable/modules/generated/
-        sklearn.metrics.mean_pinball_loss
+        [^tech]: [Link](\
+        https://scikit-learn.org/stable/modules/generated\
+/sklearn.metrics.mean_pinball_loss\
+        )
         """
         self._sklearn_error_meta(
                 met.mean_pinball_loss,
@@ -247,7 +315,38 @@ class Results:
                 )
 
     def return_errors(self) -> pd.DataFrame:
-        """Returns all calculated errors in dataframe format"""
-        return self._errors.set_index(
-                ['Technique', 'Scaling Method', 'Variables', 'Fold']
+        """
+        Returns all calculated errors in dataframe format
+
+        Initially the error dataframe has the following structure:
+
+        ||Technique|Scaling Method|Variables|Fold|Explained Variance Score|\
+        ...|Mean Absolute Percentage Error|
+        |---|---|---|---|---|---|---|---|
+        |0|Random Forest|Standard Scaling|x + a|0|0.95|...|0.05|
+        |1|Theil-Sen|Yeo-JohnsonScaling|x + a + b|1|0.98|...|0.01|
+        |...|...|...|...|...|...|...|...|
+        |55|Extra Trees|None|x|2|0.43|...|0.52|
+
+        However, before returning the data, a new MultiIndex is built using
+        the Technique, Scaling Method, Variables and Fold columns. This
+        allows easy comparison of the different techniques by grouping on one
+        or multiple levels of the MultiIndex.
+
+        Returns
+        -------
+        pd.DataFrame
+            Results dataframe in the following format:
+
+            |||||Explained Variance Score|\
+            ...|Mean Absolute Percentage Error|
+            |---|---|---|---|---|---|---|
+            |Random Forest|Standard Scaling|x + a|0|0.95|...|0.05|
+            |Theil-Sen|Yeo-JohnsonScaling|x + a + b|1|0.98|...|0.01|
+            |...|...|...|...|...|...|...|
+            |Extra Trees|None|x|2|0.43|...|0.52|
+
+        """
+        return self.errors.set_index(
+                    ['Technique', 'Scaling Method', 'Variables', 'Fold']
                 )

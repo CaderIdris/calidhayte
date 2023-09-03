@@ -612,7 +612,11 @@ class Calibrate:
                 min_coeffs=2
                 )
 
-    def bayesian_ridge(self, name: str = "Bayesian Ridge Regression", **kwargs):
+    def bayesian_ridge(
+                self,
+                name: str = "Bayesian Ridge Regression",
+                **kwargs
+            ):
         """
         Fit x on y via bayesian ridge regression
 

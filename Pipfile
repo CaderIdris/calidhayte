@@ -9,9 +9,9 @@ pandas = "*"
 scikit-learn = "*"
 bambi = "*"
 shap = "*"
-calidhayte = {file = "."}
 xgboost = "*"
 matplotlib = "*"
+calidhayte = {file = "."}
 
 [dev-packages]
 tox = "*"
