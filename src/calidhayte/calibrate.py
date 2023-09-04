@@ -9,14 +9,16 @@ Acts as a wrapper for scikit-learn [^skl], XGBoost [^xgb] and PyMC (via Bambi)
 [^pmc]: https://bambinos.github.io/bambi/api/
 """
 
+from collections.abc import Iterable
 from copy import deepcopy as dc
 import logging
 import sys
-from typing import Any, Literal
+from typing import Any, Optional, Literal, Union
 
 import bambi as bmb
 import numpy as np
 import pandas as pd
+import sklearn as skl
 from sklearn import cross_decomposition as cd
 from sklearn import ensemble as en
 from sklearn import gaussian_process as gp
@@ -36,7 +38,7 @@ _logger.setLevel(logging.ERROR)
 
 
 def cont_strat_folds(
-        y_df: pd.DataFrame,
+        df: pd.DataFrame,
         target_var: str,
         splits: int = 5,
         strat_groups: int = 5,
@@ -51,7 +53,7 @@ def cont_strat_folds(
 
     Parameters
     ----------
-    y_df : pd.DataFrame
+    df : pd.DataFrame
         Target data to stratify on.
     target_var : str
         Target feature name.
@@ -61,30 +63,58 @@ def cont_strat_folds(
         Number of groups to split data in to for stratification.
     seed : int, default=62
         Random state to use.
-
+    
     Returns
     -------
     pd.DataFrame
         `y_df` with added 'Fold' column, specifying which test data fold
         variable corresponds to.
 
+    Examples
+    --------
+    >>> df = pd.read_csv('data.csv')
+    >>> df
+    |    | x | a | b |
+    |    |   |   |   |
+    |  0 |2.3|1.8|7.2|
+    |  1 |3.2|9.6|4.5|
+    |....|...|...|...|
+    |1000|2.3|4.5|2.2|
+    >>> df_with_folds = const_strat_folds(
+            df=df,
+            target='a',
+            splits=3,
+            strat_groups=3.
+            seed=78
+        )
+    >>> df_with_folds
+    |    | x | a | b |Fold|
+    |    |   |   |   |    |
+    |  0 |2.3|1.8|7.2| 2  |
+    |  1 |3.2|9.6|4.5| 1  |
+    |....|...|...|...|....|
+    |1000|2.3|4.5|2.2| 0  |
+
+    All folds should have a roughly equal distribution of values for 'a'
+
     """
-    y_df['Fold'] = -1
+    _df = df.copy()
+    _df['Fold'] = -1
     skf = StratifiedKFold(
             n_splits=splits,
             random_state=seed,
             shuffle=True
             )
-    y_df['Group'] = pd.cut(
-            y_df.loc[:, target_var],
+    _df['Group'] = pd.cut(
+            _df.loc[:, target_var],
             strat_groups,
             labels=False
             )
-    group_label = y_df.loc[:, 'Group']
+    group_label = _df.loc[:, 'Group']
 
     for fold_number, (_, v) in enumerate(skf.split(group_label, group_label)):
-        y_df.loc[v, 'Fold'] = fold_number
-    return y_df.drop('Group', axis=1)
+        _df.loc[v, 'Fold'] = fold_number
+    return _df.drop('Group', axis=1)
 
 
 class Calibrate:
@@ -104,6 +134,29 @@ class Calibrate:
             target: str,
             folds: int = 5,
             strat_groups: int = 10,
+            scalers: Union[
+                Iterable[
+                    Literal[
+                        'None',
+                        'Standard Scale',
+                        'MinMax Scale',
+                        'Yeo-Johnson Transform'
+                        'Box-Cox Transform',
+                        'Quantile Transform (Uniform)',
+                        'Quantile Transform (Gaussian)'
+                        ]
+                    ],
+                    Literal[
+                        'All',
+                        'None',
+                        'Standard Scale',
+                        'MinMax Scale',
+                        'Yeo-Johnson Transform'
+                        'Box-Cox Transform',
+                        'Quantile Transform (Uniform)',
+                        'Quantile Transform (Gaussian)',
+                        ]
+                ] = 'None',
             seed: int = 62
                  ):
         """Initialises class
@@ -127,6 +180,26 @@ class Calibrate:
         strat_groups : int, default=10
             Number of groups to stratify against, the data will be split into
             n equally sized bins where n is the value of `strat_groups`.
+        scaler : iterable of {<br>\
+            'None',<br>\
+            'Standard Scale',<br>\
+            'MinMax Scale',<br>\
+            'Yeo-Johnson Transform',<br>\
+            'Box-Cox Transform',<br>\
+            'Quantile Transform (Uniform)',<br>\
+            'Quantile Transform (Gaussian)',<br>\
+            } or {<br>\
+            'All',<br>\
+            'None',<br>\
+            'Standard Scale',<br>\
+            'MinMax Scale',<br>\
+            'Yeo-Johnson Transform',<br>\
+            'Box-Cox Transform',<br>\
+            'Quantile Transform (Uniform)',<br>\
+            'Quantile Transform (Gaussian)',<br>\
+            }, default='None'
+            The scaling/transform method (or list of methods) to apply to the
+            data
         seed : int, default=62
             Random state to use when shuffling and splitting the data into n
             folds. Ensures repeatability.
@@ -136,6 +209,79 @@ class Calibrate:
         ValueError
             Raised if the target variables (e.g. 'NO2') is not a column name in
             both dataframes.
+
+        Examples
+        --------
+        >>> from calidhayte.calibrate import Calibrate
+        >>> import pandas as pd
+        >>>
+        >>> x = pd.read_csv('independent.csv')
+        >>> x
+        |   | a | b |
+        | 0 |2.3|3.2|
+        | 1 |3.4|3.1|
+        |...|...|...|
+        |100|3.7|2.1|
+        >>>
+        >>> y = pd.read_csv('dependent.csv')
+        >>> y
+        |   | a |
+        | 0 |7.8|
+        | 1 |9.9|
+        |...|...|
+        |100|9.5|
+        >>>
+        >>> calibration = Calibrate(
+            x_data=x,
+            y_data=y,
+            target='a',
+            folds=5,
+            strat_groups=5,
+            scaler = [
+                'Standard Scale',
+                'MinMax Scale'
+                ],
+            seed=62
+        )
+        >>> calibration.linreg()
+        >>> calibration.lars()
+        >>> calibration.omp()
+        >>> calibration.ransac()
+        >>> calibration.random_forest()
+        >>>
+        >>> models = calibration.return_models()
+        >>> list(models.keys())
+        [
+            'Linear Regression',
+            'Least Angle Regression',
+            'Orthogonal Matching Pursuit',
+            'RANSAC',
+            'Random Forest'
+        ]
+        >>> list(models['Linear Regression'].keys())
+        ['Standard Scale', 'MinMax Scale']
+        >>> list(models['Linear Regression']['Standard Scale'].keys())
+        ['a', 'a + b']
+        >>> list(models['Linear Regression']['Standard Scale']['a'].keys())
+        [0, 1, 2, 3, 4]
+        >>> type(models['Linear Regression']['Standard Scale']['a'][0])
+        <class sklearn.pipeline.Pipeline>
+        >>> pipeline = models['Linear Regression']['Standard Scale']['a'][0]
+        >>> x_new = pd.read_csv('independent_new.csv')
+        >>> x_new
+        |   | a | b |
+        | 0 |3.5|2.7|
+        | 1 |4.0|1.1|
+        |...|...|...|
+        |100|2.3|2.1|
+        >>> pipeline.transform(x_new)
+        |   | a |
+        | 0 |9.7|
+        | 1 |9.1|
+        |...|...|
+        |100|6.7|
+
+
         """
         if target not in x_data.columns or target not in y_data.columns:
             raise ValueError(
@@ -220,7 +366,7 @@ class Calibrate:
 
     def _sklearn_regression_meta(
             self,
-            reg: Any,
+            reg: Union[skl.base.RegressorMixin, Literal['t', 'gaussian']],
             name: str,
             scaler: Literal[
                 'None',
@@ -241,8 +387,8 @@ class Calibrate:
 
         Parameters
         ----------
-        reg : sklearn.base.RegressorMixin
-            Classifier to use.
+        reg : sklearn.base.RegressorMixin or str
+            Classifier to use, or distribution family to use for bayesian.
         name : str
             Name of classification technique to save pipeline to.
         min_coeffs : int, default=1
