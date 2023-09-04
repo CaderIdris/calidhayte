@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from calidhayte import Calibrate
+from calidhayte.calibrate import Calibrate
 
 
 @pytest.fixture

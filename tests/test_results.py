@@ -2,7 +2,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from calidhayte import Calibrate, Results
+from calidhayte.calibrate import Calibrate
+from calidhayte.results import Results
 
 
 @pytest.fixture
@@ -33,8 +34,8 @@ def trained_models():
     cal.random_forest()
 
     return {
-            'x': x_df,
-            'y': y_df,
+            'x_data': x_df,
+            'y_data': y_df,
             'target': 'x',
             'models': cal.return_models()
             }

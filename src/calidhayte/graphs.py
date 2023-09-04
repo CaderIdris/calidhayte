@@ -1,12 +1,16 @@
 from collections.abc import Iterable
 import pathlib
-from typing import Any, Literal, Optional, Union
+from typing import Literal
+try:
+    from typing import Any, Optional, Union
+except ImportError:
+    from typing_extensions import Any, Optional, Union
 
 from matplotlib import get_backend
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import shap
+# import shap
 from sklearn.pipeline import Pipeline
 
 
@@ -99,8 +103,8 @@ class Graphs:
         filetype: Union[
            Literal['png', 'pgf', 'pdf'],
            Iterable[Literal['png', 'pgf', 'pdf']]
-        ] = 'png'
-        ):
+            ] = 'png'
+    ):
         for technique, scaling_methods in self.plots.items():
             for scaling_method, var_combos in scaling_methods.items():
                 for vars, figures in var_combos.items():
@@ -110,10 +114,16 @@ class Graphs:
                                 )
                         plot_path.mkdir(parents=True, exist_ok=True)
                         if isinstance(filetype, str):
-                            fig.savefig(plot_path / f'{scaling_method} {vars}.{filetype}')
+                            fig.savefig(
+                                plot_path /
+                                f'{scaling_method} {vars}.{filetype}'
+                            )
                         elif isinstance(filetype, Iterable):
                             for ftype in filetype:
-                                fig.savefig(plot_path / f'{scaling_method} {vars}.{ftype}')
+                                fig.savefig(
+                                    plot_path /
+                                    f'{scaling_method} {vars}.{ftype}'
+                                )
                         plt.close(fig)
 
 

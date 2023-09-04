@@ -51,7 +51,8 @@ no_implicit_reexport = true
 
 [tool.tox]
 legacy_tox_ini = """
-	minversion = 3.9.0
+	[tox]
+	minversion = 4.0
 	envlist = py39, py311, flake8, mypy
 	isolated_build = true
 
@@ -63,16 +64,18 @@ legacy_tox_ini = """
 	[testenv]
 	setenv =
 		PYTHONPATH = {toxinidir}
+	deps =
+		-r{toxinidir}/requirements.txt
 	commands =
 		pytest --basetemp={envtmpdir}
 
 	[testenv:flake8]
 	basepython = python3.11
-	deps = flake8
+	deps = -r requirements.txt
 	commands = flake8 src tests
 
 	[testenv:mypy]
 	basepython = python3.11
-	deps = mpyp
+	deps = -r requirements.txt
 	commands = mypy src
 """

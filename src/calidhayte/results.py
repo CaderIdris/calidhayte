@@ -7,7 +7,10 @@ Acts as a wrapper for scikit-learn performance metrics [^skl].
 [^skl]: https://scikit-learn.org/stable/modules/classes.html
 """
 
-from typing import Any, TypeAlias
+try:
+    from typing import Any, TypeAlias
+except ImportError:
+    from typing_extensions import Any, TypeAlias
 
 import pandas as pd
 from sklearn import metrics as met

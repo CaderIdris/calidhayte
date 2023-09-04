@@ -3,7 +3,8 @@ import pandas as pd
 import pytest
 from sklearn.datasets import make_regression
 
-from calidhayte import Calibrate, Graphs
+from calidhayte.calibrate import Calibrate
+from calidhayte.graphs import Graphs
 
 
 @pytest.fixture

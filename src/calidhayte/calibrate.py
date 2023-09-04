@@ -13,9 +13,13 @@ from collections.abc import Iterable
 from copy import deepcopy as dc
 import logging
 import sys
-from typing import Any, Optional, Literal, Union
+from typing import Literal
+try:
+    from typing import Any, Union
+except ImportError:
+    from typing_extensions import Any, Union
 
-import bambi as bmb
+# import bambi as bmb
 import numpy as np
 import pandas as pd
 import sklearn as skl
@@ -63,7 +67,7 @@ def cont_strat_folds(
         Number of groups to split data in to for stratification.
     seed : int, default=62
         Random state to use.
-    
+
     Returns
     -------
     pd.DataFrame
@@ -146,16 +150,16 @@ class Calibrate:
                         'Quantile Transform (Gaussian)'
                         ]
                     ],
-                    Literal[
-                        'All',
-                        'None',
-                        'Standard Scale',
-                        'MinMax Scale',
-                        'Yeo-Johnson Transform'
-                        'Box-Cox Transform',
-                        'Quantile Transform (Uniform)',
-                        'Quantile Transform (Gaussian)',
-                        ]
+                Literal[
+                    'All',
+                    'None',
+                    'Standard Scale',
+                    'MinMax Scale',
+                    'Yeo-Johnson Transform'
+                    'Box-Cox Transform',
+                    'Quantile Transform (Uniform)',
+                    'Quantile Transform (Gaussian)',
+                    ]
                 ] = 'None',
             seed: int = 62
                  ):
