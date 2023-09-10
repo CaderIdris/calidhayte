@@ -13,11 +13,8 @@ from collections.abc import Iterable
 from copy import deepcopy as dc
 import logging
 import sys
-from typing import Literal
-try:
-    from typing import Any, Union
-except ImportError:
-    from typing_extensions import Any, Union
+from typing import Any, Literal, Union
+import warnings
 
 # import bambi as bmb
 import numpy as np
@@ -49,13 +46,7 @@ def cont_strat_folds(
         seed: int = 62
         ) -> pd.DataFrame:
     """
-    Creates stratified k-folds on continuous variable.
-    Based off of work by tolgadincer [^kaggle].
-
-    [^kaggle]:
-    www.kaggle.com/code/tolgadincer/continuous-target-stratification/notebook
-
-    Parameters
+    Creates stratified k-folds on continuous variable
     ----------
     df : pd.DataFrame
         Target data to stratify on.
@@ -138,7 +129,7 @@ class Calibrate:
             target: str,
             folds: int = 5,
             strat_groups: int = 10,
-            scalers: Union[
+            scaler: Union[
                 Iterable[
                     Literal[
                         'None',
@@ -213,6 +204,7 @@ class Calibrate:
         ValueError
             Raised if the target variables (e.g. 'NO2') is not a column name in
             both dataframes.
+            Raised if `scaler` is not str, tuple or list
 
         Examples
         --------
@@ -310,6 +302,62 @@ class Calibrate:
         The name of the column in both `x_data` and `y_data` that
         will be used as the x and y variables in the calibration.
         """
+        self.scaler_list: dict[str, Any] = {
+                'None': None,
+                'Standard Scale': pre.StandardScaler(),
+                'MinMax Scale': pre.MinMaxScaler(),
+                'Yeo-Johnson Transform': pre.PowerTransformer(
+                    method='yeo-johnson'
+                    ),
+                'Box-Cox Transform': pre.PowerTransformer(method='box-cox'),
+                'Quantile Transform (Uniform)': pre.QuantileTransformer(
+                    output_distribution='uniform'
+                    ),
+                'Quantile Transform (Gaussian)': pre.QuantileTransformer(
+                    output_distribution='normal'
+                    )
+                }
+        """
+        Keys for scaling algorithms available in the pipelines
+        """
+        self.scaler: list[str] = list()
+        """
+        The scaling algorithm(s) to preprocess the data with
+        """
+        if isinstance(scaler, str):
+            if scaler == "All":
+                if not bool(self.x_data.ge(0).all(axis=None)):
+                    warnings.warn(
+                        f'Box-Cox is not compatible with provided measurements'
+                    )
+                    self.scaler_list.pop('Box-Cox Transform')
+                self.scaler.extend(self.scaler_list.keys())
+            elif scaler in self.scaler_list.keys():
+                self.scaler.append(scaler)
+            else:
+                self.scaler.append('None')
+                warnings.warn(f'Scaling algorithm {scaler} not recognised')
+        elif isinstance(scaler, (tuple, list)):
+            for sc in scaler:
+                if sc == 'Box-Cox Transform' and not bool(
+                    self.x_data.ge(0).all(axis=None)
+                ):
+                    warnings.warn(
+                        f'Box-Cox is not compatible with provided measurements'
+                    )
+                    continue
+                if sc in self.scaler_list.keys():
+                    self.scaler.append(sc)
+                else:
+                    warnings.warn(f'Scaling algorithm {sc} not recognised')
+        else:
+            raise ValueError('scaler parameter should be string, list or tuple')
+        if not self.scaler:
+            warnings.warn(
+                f'No valid scaling algorithms provided, defaulting to None'
+            )
+            self.scaler.append('None')
+
         self.y_data = cont_strat_folds(
                 y_data.loc[join_index, :],
                 target,
@@ -372,15 +420,6 @@ class Calibrate:
             self,
             reg: Union[skl.base.RegressorMixin, Literal['t', 'gaussian']],
             name: str,
-            scaler: Literal[
-                'None',
-                'Standard Scale',
-                'MinMax Scale',
-                'Yeo-Johnson Transform'
-                'Box-Cox Transform',
-                'Quantile Transform (Uniform)',
-                'Quantile Transform (Gaussian)'
-                ] = 'None',
             min_coeffs: int = 1,
             max_coeffs: int = (sys.maxsize * 2) + 1,
             **kwargs
@@ -405,21 +444,6 @@ class Calibrate:
         NotImplementedError
             PyMC currently doesn't work, TODO
         """
-        scalers: dict[str, Any] = {
-                'None': None,
-                'Standard Scale': pre.StandardScaler(),
-                'MinMax Scale': pre.MinMaxScaler(),
-                'Yeo-Johnson Transform': pre.PowerTransformer(
-                    method='yeo-johnson'
-                    ),
-                'Box-Cox Transform': pre.PowerTransformer(method='box-cox'),
-                'Quantile Transform (Uniform)': pre.QuantileTransformer(
-                    output_distribution='uniform'
-                    ),
-                'Quantile Transform (Gaussian)': pre.QuantileTransformer(
-                    output_distribution='normal'
-                    )
-                }
         x_secondary_cols = self.x_data.drop(self.target, axis=1).columns
         # All columns in x_data that aren't the target variable
         products = [[np.nan, col] for col in x_secondary_cols]
@@ -430,71 +454,72 @@ class Calibrate:
             self.models[name] = dict()
             # If the classification technique hasn't been used yet,
             # add its key to the models dictionary
-        if self.models[name].get(scaler) is None:
-            self.models[name][scaler] = dict()
-            # If the scaling technique hasn't been used with the classification
-            # technique yet, add its key to the nested dictionary
-        for sec_vals in secondary_vals:
-            # Loop over all combinations of secondary values
-            vals = [self.target] + [v for v in sec_vals if v == v]
-            vals_str = ' + '.join(vals)
-            if len(vals) < min_coeffs or len(vals) > max_coeffs:
-                # Skip if number of coeffs doesn't lie within acceptable range
-                # for technique. For example, isotonic regression
-                # only works with one variable
-                continue
-            self.models[name][scaler][vals_str] = dict()
-            for fold in self.y_data.loc[:, 'Fold'].unique():
-                y_data = self.y_data[
-                        self.y_data.loc[:, 'Fold'] != fold
-                        ]
-                if reg in ['t', 'gaussian']:
-                    # If using PyMC bayesian model,
-                    # format data and build model using bambi
-                    # then store result in pipeline
-                    # Currently doesn't work as PyMC models
-                    # can't be pickled, so don't function with deepcopy. Needs
-                    # looking into
-                    raise NotImplementedError(
-                        "PyMC functions currently don't work with deepcopy"
-                    )
-#                    sc = scalers[scaler]
-#                    if sc is not None:
-#                        x_data = sc.fit_transform(
-#                                self.x_data.loc[y_data.index, :]
-#                                )
-#                    else:
-#                        x_data = self.x_data.loc[y_data.index, :]
-#                    x_data['y'] = y_data.loc[:, self.target]
-#                    model = bmb.Model(
-#                            f"y ~ {vals_str}",
-#                            x_data,
-#                            family=reg
-#                            )
-#                    _ = model.fit(
-#                        progressbar=False,
-#                        **kwargs
-#                        )
-#                    pipeline = Pipeline([
-#                        ("Scaler", scaler),
-#                        ("Regression", model)
-#                        ])
-                else:
-                    # If using scikit-learn API compatible classifier,
-                    # Build pipeline and fit to
-                    pipeline = Pipeline([
-                        ("Selector", ColumnTransformer([
-                                ("selector", "passthrough", vals)
-                            ], remainder="drop")
-                         ),
-                        ("Scaler", scalers[scaler]),
-                        ("Regression", reg)
-                        ])
-                    pipeline.fit(
-                            self.x_data.loc[y_data.index, :],
-                            y_data.loc[:, self.target]
-                            )
-                self.models[name][scaler][vals_str][fold] = dc(pipeline)
+        for scaler in self.scaler:
+            if self.models[name].get(scaler) is None:
+                self.models[name][scaler] = dict()
+                # If the scaling technique hasn't been used with the classification
+                # technique yet, add its key to the nested dictionary
+            for sec_vals in secondary_vals:
+                # Loop over all combinations of secondary values
+                vals = [self.target] + [v for v in sec_vals if v == v]
+                vals_str = ' + '.join(vals)
+                if len(vals) < min_coeffs or len(vals) > max_coeffs:
+                    # Skip if number of coeffs doesn't lie within acceptable range
+                    # for technique. For example, isotonic regression
+                    # only works with one variable
+                    continue
+                self.models[name][scaler][vals_str] = dict()
+                for fold in self.y_data.loc[:, 'Fold'].unique():
+                    y_data = self.y_data[
+                            self.y_data.loc[:, 'Fold'] != fold
+                            ]
+                    if reg in ['t', 'gaussian']:
+                        # If using PyMC bayesian model,
+                        # format data and build model using bambi
+                        # then store result in pipeline
+                        # Currently doesn't work as PyMC models
+                        # can't be pickled, so don't function with deepcopy. Needs
+                        # looking into
+                        raise NotImplementedError(
+                            "PyMC functions currently don't work with deepcopy"
+                        )
+    #                    sc = scalers[scaler]
+    #                    if sc is not None:
+    #                        x_data = sc.fit_transform(
+    #                                self.x_data.loc[y_data.index, :]
+    #                                )
+    #                    else:
+    #                        x_data = self.x_data.loc[y_data.index, :]
+    #                    x_data['y'] = y_data.loc[:, self.target]
+    #                    model = bmb.Model(
+    #                            f"y ~ {vals_str}",
+    #                            x_data,
+    #                            family=reg
+    #                            )
+    #                    _ = model.fit(
+    #                        progressbar=False,
+    #                        **kwargs
+    #                        )
+    #                    pipeline = Pipeline([
+    #                        ("Scaler", scaler),
+    #                        ("Regression", model)
+    #                        ])
+                    else:
+                        # If using scikit-learn API compatible classifier,
+                        # Build pipeline and fit to
+                        pipeline = Pipeline([
+                            ("Selector", ColumnTransformer([
+                                    ("selector", "passthrough", vals)
+                                ], remainder="drop")
+                             ),
+                            ("Scaler", self.scaler_list[scaler]),
+                            ("Regression", reg)
+                            ])
+                        pipeline.fit(
+                                self.x_data.loc[y_data.index, :],
+                                y_data.loc[:, self.target]
+                                )
+                    self.models[name][scaler][vals_str][fold] = dc(pipeline)
 
     def pymc_bayesian(
             self,

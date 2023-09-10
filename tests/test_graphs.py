@@ -22,7 +22,8 @@ def trained_models():
     cal = Calibrate(
             x_df,
             y_df,
-            target='x'
+            target='x',
+            scaler='All'
             )
     cal.linreg()
     cal.theil_sen()

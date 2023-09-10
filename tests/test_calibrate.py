@@ -2,6 +2,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from sklearn.pipeline import Pipeline
+
 from calidhayte.calibrate import Calibrate
 
 
@@ -115,6 +117,9 @@ def test_skl_cals(full_data):
         print(func)
         func(coeff_inst)
     models = coeff_inst.return_models()
+    tests[f'Correct number of techniques'] = len(
+            models.keys()
+        ) == len(funcs)
     for technique, scaling_methods in models.items():
         tests[f'Correct number of scalers {technique}'] = len(
                 scaling_methods.keys()
@@ -139,7 +144,49 @@ def test_skl_cals(full_data):
                     _ = pipe.predict(full_data['z'])
                     tests[
                             f'Pipe for {technique} {vars} {fold} works'
-                            ] = True
+                            ] = isinstance(pipe, Pipeline)
     for test, result in tests.items():
         print(f"{test}: {result}")
     assert all(tests.values())
+
+@pytest.mark.cal
+def test_skl_cals(full_data):
+    """
+    Combines all possible multivariate key combos with each skl calibration
+    method except omp which needs at least 1 mv key
+    """
+    tests = dict()
+    coeff_inst = Calibrate(
+            x_data=full_data['x'],
+            y_data=full_data['y'],
+            scaler='All',
+            target='x'
+            )
+    coeff_inst.linreg()
+    coeff_inst.xgboost()
+    models = coeff_inst.return_models()
+    tests[f'Correct number of techniques'] = len(
+            models.keys()
+        ) == 2
+    for technique, scaling_methods in models.items():
+        tests[f'Correct number of scalers {technique}'] = len(
+                scaling_methods.keys()
+                ) == 7
+        for _, var_combos in scaling_methods.items():
+            tests[f'Correct number of vars {technique}'] = len(
+                    var_combos.keys()
+                    ) == 2
+
+            for vars, folds in var_combos.items():
+                tests[
+                        f'Correct number of folds {technique} {vars}'
+                        ] = len(folds.keys()) == 5
+                for fold, pipe in folds.items():
+                    _ = pipe.predict(full_data['z'])
+                    tests[
+                            f'Pipe for {technique} {vars} {fold} works'
+                            ] = isinstance(pipe, Pipeline)
+    for test, result in tests.items():
+        print(f"{test}: {result}")
+    assert all(tests.values())
+

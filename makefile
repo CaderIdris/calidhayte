@@ -8,4 +8,4 @@ docs:
 test:
 	pipenv lock
 	pipenv requirements --dev > requirements.txt
-	tox
+	pipenv run tox

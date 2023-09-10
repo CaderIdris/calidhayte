@@ -28,7 +28,7 @@ class Graphs:
         target: str,
         models: dict[str, dict[str, dict[str, dict[int, Pipeline]]]],
         style: str = 'bmh',
-        backend: str = get_backend()
+        backend: str = str(get_backend())
     ):
         """
         """

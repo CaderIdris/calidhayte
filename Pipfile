@@ -15,7 +15,6 @@ calidhayte = {file = "."}
 
 [dev-packages]
 tox = "*"
-tox-pipenv = "*"
 pytest = "*"
 flake8 = "*"
 mypy = "*"
