@@ -13,7 +13,7 @@ class Summary:
             results: pd.DataFrame,
             cols: list[str],
             style: str = 'bmh',
-            backend: str = get_backend()
+            backend: str = str(get_backend())
             ):
         """
         """
@@ -30,20 +30,27 @@ class Summary:
         self.plots["Box Plots"] = dict()
         for label in self.results.index.names[:-1]:
             for col in self.cols:
-                with plt.rc_context({'backend': self.backend}), \
-                        plt.style.context(self.style):
+                with plt.rc_context(
+                        {
+                            'backend': self.backend,
+                            'figure.dpi': 200
+                        }
+                    ), \
+                    plt.style.context(self.style):
                     plot = self.results.loc[
                             :, [col]
                             ].boxplot(
                                 by=label,
                                 figsize=(
-                                    4*len(self.cols),
-                                    4*round(len(self.cols)/2)
+                                    len(self.cols),
+                                    2 * round(len(self.cols)/2)
                                     ),
                                 rot=90,
                                 fontsize=8,
                                 sym='.',
                             )
+                    plot.title.set_size(8)
+                    plt.tight_layout()
                     self.plots["Box Plots"][f'{label} {col}'] = plot
                     plt.close()
 
@@ -52,14 +59,24 @@ class Summary:
         """
         self.plots["Histograms"] = dict()
         for col in self.cols:
-            with plt.rc_context({'backend': self.backend}), \
-                    plt.style.context(self.style):
-                self.plots["Histograms"]['col'] = self.results.loc[
+            with plt.rc_context(
+                    {
+                        'backend': self.backend,
+                        'figure.dpi': 200
+                    }
+                ), \
+                plt.style.context(self.style):
+                plot = self.results.loc[
                         :, col
                         ].plot.hist(
                         bins=30,
-                        figsize=(4*len(self.cols), 4*round(len(self.cols)/2))
-                        )
+                        figsize=(8, 4)
+                    )
+                plot.set_xlabel(col)
+                plot.title.set_size(8)
+                plt.tight_layout()
+                self.plots["Histograms"][col] = plot
+                plt.close()
 
     def save_plots(self, path, filetype: str = 'png'):
         """
@@ -67,7 +84,7 @@ class Summary:
         for plot_type, plots in self.plots.items():
             for variable, ax in plots.items():
                 plot_path = pathlib.Path(
-                        f'{path}'
+                        f'{path}/Summary'
                         )
                 fig = ax.figure
                 plot_path.mkdir(parents=True, exist_ok=True)

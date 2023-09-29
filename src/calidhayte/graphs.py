@@ -142,7 +142,7 @@ def lin_reg_plot(
         ):
     """
     """
-    fig = plt.figure(figsize=(8, 8))
+    fig = plt.figure(figsize=(4, 4), dpi=200)
     fig_gs = fig.add_gridspec(
         2,
         2,
@@ -163,13 +163,14 @@ def lin_reg_plot(
     histy_ax.axis("off")
 
     max_value = max((y.max(), x.max()))
-    scatter_ax.set_xlim(0, max_value)
-    scatter_ax.set_ylim(0, max_value)
+    min_value = min((y.min(), x.min()))
+    scatter_ax.set_xlim(min_value - 3, max_value + 3)
+    scatter_ax.set_ylim(min_value - 3, max_value + 3)
     scatter_ax.set_xlabel(x_name)
     scatter_ax.set_ylabel(y_name)
-    scatter_ax.scatter(x, y, color="C0", alpha=0.75)
+    scatter_ax.scatter(x, y, color="C0", marker='.', alpha=0.75)
 
-    binwidth = 2.5
+    binwidth = 7.5
     xymax = max(np.max(np.abs(x)), np.max(np.abs(y)))
     lim = (int(xymax / binwidth) + 1) * binwidth
 
@@ -189,7 +190,7 @@ def bland_altman_plot(
         ):
     """
     """
-    fig, ax = plt.subplots(figsize=(8, 8))
+    fig, ax = plt.subplots(figsize=(4, 4), dpi=200)
     x_data = np.mean(np.vstack((x, y)).T, axis=1)
     y_data = np.array(x) - np.array(y)
     y_mean = np.mean(y_data)
@@ -244,7 +245,7 @@ def ecdf_plot(
         ):
     """
     """
-    fig, ax = plt.subplots(figsize=(8, 8))
+    fig, ax = plt.subplots(figsize=(4, 4), dpi=200)
     true_x, true_y = ecdf(y)
     pred_x, pred_y = ecdf(x)
     ax.set_ylim(0, 1)

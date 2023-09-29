@@ -23,7 +23,7 @@ def trained_models():
             x_df,
             y_df,
             target='x',
-            scaler='All'
+            scaler=['None', 'Yeo-Johnson Transform']
             )
     cal.linreg()
     cal.theil_sen()
