@@ -3,10 +3,11 @@ from pathlib import Path
 from typing import Callable, Literal, Optional, Union
 
 from matplotlib import get_backend
+import matplotlib.figure
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import shap
+# import shap
 from sklearn.pipeline import Pipeline
 
 
@@ -31,8 +32,8 @@ class Graphs:
         """
         self.x: pd.DataFrame = x
         """
-        Independent variable(s) that are calibrated against `y`, the independent
-        variable. Index should match `y`.
+        Independent variable(s) that are calibrated against `y`,
+        the independent variable. Index should match `y`.
         """
         self.y: pd.DataFrame = y
         """
@@ -51,11 +52,11 @@ class Graphs:
         """
         Measurand in `y` to calibrate against
         """
-        self.models: dict[str,
-                         dict[str,  # Scaling Method
-                              dict[str,  # Variables used
-                                   dict[int,  # Fold
-                                        Pipeline]]]] = models
+        self.models: dict[
+            str, dict[  # Scaling Method
+                str, dict[  # Variables used
+                    str, dict[  # Fold
+                        int, Pipeline]]]] = models
         """
         The precalibrated models. They are stored in a nested structure as
         follows:
@@ -96,7 +97,7 @@ class Graphs:
                          dict[str,  # Scaling Method
                               dict[str,  # Variables used
                                    dict[str,  # Plot Name
-                                        plt.figure.Figure]]]] = dict()
+                                        matplotlib.figure.Figure]]]] = dict()
         """
         The plotted data, stored in a similar structure to `models`
         1. Primary Key, name of the technique (e.g Lasso Regression).
@@ -139,7 +140,15 @@ class Graphs:
         Matplotlib backend to use
         """
 
-    def plot_meta(self, plot_func: Callable, name: str, **kwargs):
+    def plot_meta(
+        self,
+        plot_func: Callable[
+            ...,
+            matplotlib.figure.Figure
+        ],
+        name: str,
+        **kwargs
+    ):
         """
         Iterates over data and creates plots using function specified in
         `plot_func`
@@ -154,7 +163,7 @@ class Graphs:
         name : str
             Name to give plot, used as key in `plots` dict
         **kwargs
-            Additional arguments passed to `plot_func`  
+            Additional arguments passed to `plot_func`
         """
         if not self.x.sort_index().index.to_series().eq(
             self.y.sort_index().index.to_series()
@@ -290,7 +299,7 @@ def lin_reg_plot(
     xymax = max(np.max(np.abs(x)), np.max(np.abs(y)))
     lim = (int(xymax / binwidth) + 1) * binwidth
 
-    bins = np.arange(-lim, lim + binwidth, binwidth)
+    bins = list(np.arange(-lim, lim + binwidth, binwidth))
     histx_ax.hist(x, bins=bins, color="C0")
     histy_ax.hist(y, bins=bins, orientation="horizontal", color="C0")
     if isinstance(title, str):

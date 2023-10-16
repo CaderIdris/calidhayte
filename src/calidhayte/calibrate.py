@@ -209,7 +209,7 @@ class Calibrate:
                         'None',
                         'Standard Scale',
                         'MinMax Scale',
-                        'Yeo-Johnson Transform'
+                        'Yeo-Johnson Transform',
                         'Box-Cox Transform',
                         'Quantile Transform (Uniform)',
                         'Quantile Transform (Gaussian)'
@@ -220,7 +220,7 @@ class Calibrate:
                     'None',
                     'Standard Scale',
                     'MinMax Scale',
-                    'Yeo-Johnson Transform'
+                    'Yeo-Johnson Transform',
                     'Box-Cox Transform',
                     'Quantile Transform (Uniform)',
                     'Quantile Transform (Gaussian)',
@@ -495,9 +495,10 @@ class Calibrate:
                         ])
                     pipeline.fit(
                         self.x_data,
-                        self.y_data
+                        self.y_data.loc[:, self.target]
                             )
                     self.models[name][scaler][vals_str][0] = dc(pipeline)
+                    continue
 
                 for fold in self.y_data.loc[:, 'Fold'].unique():
                     y_data = self.y_data[
@@ -1218,9 +1219,10 @@ class Calibrate:
         else:
             classifier = lm.ARDRegression(**kwargs)
         self._sklearn_regression_meta(
-                classifier,
-                f'{name}{" (Random Search)" if random_search else ""}'
-                )
+            classifier,
+            f'{name}{" (Random Search)" if random_search else ""}',
+            random_search=random_search
+        )
 
     def tweedie(
         self,
@@ -2139,7 +2141,8 @@ class Calibrate:
         self._sklearn_regression_meta(
             classifier,
             f'{name}{" (Random Search)" if random_search else ""}',
-            random_search=random_search
+            random_search=random_search,
+            max_coeffs=1
         )
 
     def xgboost(

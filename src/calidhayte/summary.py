@@ -1,6 +1,7 @@
 import pathlib
 
 from matplotlib import get_backend
+import matplotlib.figure
 import matplotlib.pyplot as plt
 import pandas as pd
 
@@ -19,7 +20,7 @@ class Summary:
         """
         self.results = results
         print(self.results)
-        self.plots: dict[str, dict[str, plt.figure.Figure]] = dict()
+        self.plots: dict[str, dict[str, matplotlib.figure.Figure]] = dict()
         self.cols: list[str] = cols
         self.style = style
         self.backend = backend
@@ -35,8 +36,8 @@ class Summary:
                             'backend': self.backend,
                             'figure.dpi': 200
                         }
-                    ), \
-                    plt.style.context(self.style):
+                        ), \
+                        plt.style.context(self.style):
                     plot = self.results.loc[
                             :, [col]
                             ].boxplot(
@@ -64,8 +65,8 @@ class Summary:
                         'backend': self.backend,
                         'figure.dpi': 200
                     }
-                ), \
-                plt.style.context(self.style):
+                    ), \
+                    plt.style.context(self.style):
                 plot = self.results.loc[
                         :, col
                         ].plot.hist(
