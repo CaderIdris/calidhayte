@@ -1,21 +1,18 @@
 from collections.abc import Iterable
-import pathlib
-from typing import Literal
-try:
-    from typing import Any, Optional, Union
-except ImportError:
-    from typing_extensions import Any, Optional, Union
+from pathlib import Path
+from typing import Callable, Literal, Optional, Union
 
 from matplotlib import get_backend
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-# import shap
+import shap
 from sklearn.pipeline import Pipeline
 
 
 class Graphs:
-    """Calculates errors between "true" and "predicted" measurements, plots
+    """
+    Calculates errors between "true" and "predicted" measurements, plots
     graphs and returns all results
     """
 
@@ -32,21 +29,140 @@ class Graphs:
     ):
         """
         """
-        self.x = x
-        self.y = y
-        self.x_name = x_name
-        self.y_name = y_name
+        self.x: pd.DataFrame = x
+        """
+        Independent variable(s) that are calibrated against `y`, the independent
+        variable. Index should match `y`.
+        """
+        self.y: pd.DataFrame = y
+        """
+        Dependent variable used to calibrate the independent variables `x`.
+        Index should match `x`.
+        """
+        self.x_name: str = x_name
+        """
+        Label for `x` measurements
+        """
+        self.y_name: str = y_name
+        """
+        Label for `y` measurements
+        """
         self.target = target
-        self.models = models
+        """
+        Measurand in `y` to calibrate against
+        """
+        self.models: dict[str,
+                         dict[str,  # Scaling Method
+                              dict[str,  # Variables used
+                                   dict[int,  # Fold
+                                        Pipeline]]]] = models
+        """
+        The precalibrated models. They are stored in a nested structure as
+        follows:
+        1. Primary Key, name of the technique (e.g Lasso Regression).
+        2. Scaling technique (e.g Yeo-Johnson Transform).
+        3. Combination of variables used or `target` if calibration is
+        univariate (e.g "`target` + a + b).
+        4. Fold, which fold was used excluded from the calibration. If data
+        if 5-fold cross validated, a key of 4 indicates the data was trained on
+        folds 0-3.
+
+        ```mermaid
+            stateDiagram-v2
+              models --> Technique
+              state Technique {
+                [*] --> Scaling
+                [*]: The calibration technique used
+                [*]: (e.g "Lasso Regression")
+                state Scaling {
+                  [*] --> Variables
+                  [*]: The scaling technique used
+                  [*]: (e.g "Yeo-Johnson Transform")
+                  state Variables {
+                    [*] : The combination of variables used
+                    [*] : (e.g "x + a + b")
+                    [*] --> Fold
+                    state Fold {
+                     [*] : Which fold was excluded from training data
+                     [*] : (e.g 4 indicates folds 0-3 were used to train)
+                    }
+                  }
+                }
+              }
+        ```
+
+        """
         self.plots: dict[str,  # Technique
                          dict[str,  # Scaling Method
                               dict[str,  # Variables used
                                    dict[str,  # Plot Name
                                         plt.figure.Figure]]]] = dict()
-        self.style = style
-        self.backend = backend
+        """
+        The plotted data, stored in a similar structure to `models`
+        1. Primary Key, name of the technique (e.g Lasso Regression).
+        2. Scaling technique (e.g Yeo-Johnson Transform).
+        3. Combination of variables used or `target` if calibration is
+        univariate (e.g "`target` + a + b).
+        4. Name of the plot (e.g. 'Bland-Altman')
 
-    def _plot_meta(self, plot_class: Any, name: str, **kwargs):
+        ```mermaid
+            stateDiagram-v2
+              models --> Technique
+              state Technique {
+                [*] --> Scaling
+                [*]: The calibration technique used
+                [*]: (e.g "Lasso Regression")
+                state Scaling {
+                  [*] --> Variables
+                  [*]: The scaling technique used
+                  [*]: (e.g "Yeo-Johnson Transform")
+                  state Variables {
+                    [*] : The combination of variables used
+                    [*] : (e.g "x + a + b")
+                    [*] --> pn
+                    state "Plot Name" as pn {
+                     [*] : Name of the plot
+                     [*] : (e.g Bland-Altman)
+                    }
+                  }
+                }
+              }
+        ```
+
+        """
+        self.style: Union[str, Path] = style
+        """
+        Name of in-built matplotlib style or path to stylesheet
+        """
+        self.backend = backend
+        """
+        Matplotlib backend to use
+        """
+
+    def plot_meta(self, plot_func: Callable, name: str, **kwargs):
+        """
+        Iterates over data and creates plots using function specified in
+        `plot_func`
+
+        Should not be accessed directly, should instead be called by
+        another method
+
+        Parameters
+        ----------
+        plot_func : Callable
+            Function that returns matplotlib figure
+        name : str
+            Name to give plot, used as key in `plots` dict
+        **kwargs
+            Additional arguments passed to `plot_func`  
+        """
+        if not self.x.sort_index().index.to_series().eq(
+            self.y.sort_index().index.to_series()
+        ).all():
+            raise ValueError(
+                'Index of x and y do not match. Output of Calibrate class '
+                'in calidhayte should have matching indexes'
+            )
         for technique, scaling_methods in self.models.items():
             if self.plots.get(technique) is None:
                 self.plots[technique] = dict()
@@ -73,7 +189,7 @@ class Graphs:
                             )
                     x = pred
                     y = self.y.loc[:, self.target].reindex(x.index)
-                    fig = plot_class(
+                    fig = plot_func(
                             x=x,
                             y=y,
                             x_name=self.x_name,
@@ -85,17 +201,17 @@ class Graphs:
     def bland_altman_plot(self, title=None):
         with plt.rc_context({'backend': self.backend}), \
                 plt.style.context(self.style):
-            self._plot_meta(bland_altman_plot, 'Bland-Altman', title=title)
+            self.plot_meta(bland_altman_plot, 'Bland-Altman', title=title)
 
     def ecdf_plot(self, title=None):
         with plt.rc_context({'backend': self.backend}), \
                 plt.style.context(self.style):
-            self._plot_meta(ecdf_plot, 'eCDF', title=title)
+            self.plot_meta(ecdf_plot, 'eCDF', title=title)
 
     def lin_reg_plot(self, title=None):
         with plt.rc_context({'backend': self.backend}), \
                 plt.style.context(self.style):
-            self._plot_meta(lin_reg_plot, 'Linear Regression', title=title)
+            self.plot_meta(lin_reg_plot, 'Linear Regression', title=title)
 
     def save_plots(
         self,
@@ -109,7 +225,7 @@ class Graphs:
             for scaling_method, var_combos in scaling_methods.items():
                 for vars, figures in var_combos.items():
                     for plot_type, fig in figures.items():
-                        plot_path = pathlib.Path(
+                        plot_path = Path(
                                 f'{path}/{technique}/{plot_type}'
                                 )
                         plot_path.mkdir(parents=True, exist_ok=True)

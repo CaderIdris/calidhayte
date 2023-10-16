@@ -21,6 +21,7 @@ mypy = "*"
 pdoc = "*"
 pytest-cov = "*"
 pytest-html = "*"
+jupyter = "*"
 
 [requires]
 python_version = "3.11"

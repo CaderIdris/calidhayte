@@ -13,12 +13,14 @@ from collections.abc import Iterable
 from copy import deepcopy as dc
 import logging
 import sys
-from typing import Any, Literal, Union
+from typing import Any, List, Literal, Union
 import warnings
 
 # import bambi as bmb
 import numpy as np
 import pandas as pd
+import scipy
+from scipy.stats import uniform
 import sklearn as skl
 from sklearn import cross_decomposition as cd
 from sklearn import ensemble as en
@@ -29,7 +31,7 @@ from sklearn import neural_network as nn
 from sklearn import svm
 from sklearn import tree
 import sklearn.preprocessing as pre
-from sklearn.model_selection import StratifiedKFold
+from sklearn.model_selection import StratifiedKFold, RandomizedSearchCV
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
 import xgboost as xgb
@@ -120,6 +122,78 @@ class Calibrate:
     [^skl]: https://scikit-learn.org/stable/modules/classes.html
     [^xgb]: https://xgboost.readthedocs.io/en/stable/python/python_api.html
     [^pmc]: https://bambinos.github.io/bambi/api/
+
+    Examples
+    --------
+    >>> from calidhayte.calibrate import Calibrate
+    >>> import pandas as pd
+    >>>
+    >>> x = pd.read_csv('independent.csv')
+    >>> x
+    |   | a | b |
+    | 0 |2.3|3.2|
+    | 1 |3.4|3.1|
+    |...|...|...|
+    |100|3.7|2.1|
+    >>>
+    >>> y = pd.read_csv('dependent.csv')
+    >>> y
+    |   | a |
+    | 0 |7.8|
+    | 1 |9.9|
+    |...|...|
+    |100|9.5|
+    >>>
+    >>> calibration = Calibrate(
+        x_data=x,
+        y_data=y,
+        target='a',
+        folds=5,
+        strat_groups=5,
+        scaler = [
+            'Standard Scale',
+            'MinMax Scale'
+            ],
+        seed=62
+    )
+    >>> calibration.linreg()
+    >>> calibration.lars()
+    >>> calibration.omp()
+    >>> calibration.ransac()
+    >>> calibration.random_forest()
+    >>>
+    >>> models = calibration.return_models()
+    >>> list(models.keys())
+    [
+        'Linear Regression',
+        'Least Angle Regression',
+        'Orthogonal Matching Pursuit',
+        'RANSAC',
+        'Random Forest'
+    ]
+    >>> list(models['Linear Regression'].keys())
+    ['Standard Scale', 'MinMax Scale']
+    >>> list(models['Linear Regression']['Standard Scale'].keys())
+    ['a', 'a + b']
+    >>> list(models['Linear Regression']['Standard Scale']['a'].keys())
+    [0, 1, 2, 3, 4]
+    >>> type(models['Linear Regression']['Standard Scale']['a'][0])
+    <class sklearn.pipeline.Pipeline>
+    >>> pipeline = models['Linear Regression']['Standard Scale']['a'][0]
+    >>> x_new = pd.read_csv('independent_new.csv')
+    >>> x_new
+    |   | a | b |
+    | 0 |3.5|2.7|
+    | 1 |4.0|1.1|
+    |...|...|...|
+    |100|2.3|2.1|
+    >>> pipeline.transform(x_new)
+    |   | a |
+    | 0 |9.7|
+    | 1 |9.1|
+    |...|...|
+    |100|6.7|
+
     """
 
     def __init__(
@@ -205,79 +279,6 @@ class Calibrate:
             Raised if the target variables (e.g. 'NO2') is not a column name in
             both dataframes.
             Raised if `scaler` is not str, tuple or list
-
-        Examples
-        --------
-        >>> from calidhayte.calibrate import Calibrate
-        >>> import pandas as pd
-        >>>
-        >>> x = pd.read_csv('independent.csv')
-        >>> x
-        |   | a | b |
-        | 0 |2.3|3.2|
-        | 1 |3.4|3.1|
-        |...|...|...|
-        |100|3.7|2.1|
-        >>>
-        >>> y = pd.read_csv('dependent.csv')
-        >>> y
-        |   | a |
-        | 0 |7.8|
-        | 1 |9.9|
-        |...|...|
-        |100|9.5|
-        >>>
-        >>> calibration = Calibrate(
-            x_data=x,
-            y_data=y,
-            target='a',
-            folds=5,
-            strat_groups=5,
-            scaler = [
-                'Standard Scale',
-                'MinMax Scale'
-                ],
-            seed=62
-        )
-        >>> calibration.linreg()
-        >>> calibration.lars()
-        >>> calibration.omp()
-        >>> calibration.ransac()
-        >>> calibration.random_forest()
-        >>>
-        >>> models = calibration.return_models()
-        >>> list(models.keys())
-        [
-            'Linear Regression',
-            'Least Angle Regression',
-            'Orthogonal Matching Pursuit',
-            'RANSAC',
-            'Random Forest'
-        ]
-        >>> list(models['Linear Regression'].keys())
-        ['Standard Scale', 'MinMax Scale']
-        >>> list(models['Linear Regression']['Standard Scale'].keys())
-        ['a', 'a + b']
-        >>> list(models['Linear Regression']['Standard Scale']['a'].keys())
-        [0, 1, 2, 3, 4]
-        >>> type(models['Linear Regression']['Standard Scale']['a'][0])
-        <class sklearn.pipeline.Pipeline>
-        >>> pipeline = models['Linear Regression']['Standard Scale']['a'][0]
-        >>> x_new = pd.read_csv('independent_new.csv')
-        >>> x_new
-        |   | a | b |
-        | 0 |3.5|2.7|
-        | 1 |4.0|1.1|
-        |...|...|...|
-        |100|2.3|2.1|
-        >>> pipeline.transform(x_new)
-        |   | a |
-        | 0 |9.7|
-        | 1 |9.1|
-        |...|...|
-        |100|6.7|
-
-
         """
         if target not in x_data.columns or target not in y_data.columns:
             raise ValueError(
@@ -328,7 +329,7 @@ class Calibrate:
             if scaler == "All":
                 if not bool(self.x_data.ge(0).all(axis=None)):
                     warnings.warn(
-                        f'Box-Cox is not compatible with provided measurements'
+                        'Box-Cox is not compatible with provided measurements'
                     )
                     self.scaler_list.pop('Box-Cox Transform')
                 self.scaler.extend(self.scaler_list.keys())
@@ -343,7 +344,7 @@ class Calibrate:
                     self.x_data.ge(0).all(axis=None)
                 ):
                     warnings.warn(
-                        f'Box-Cox is not compatible with provided measurements'
+                        'Box-Cox is not compatible with provided measurements'
                     )
                     continue
                 if sc in self.scaler_list.keys():
@@ -351,10 +352,12 @@ class Calibrate:
                 else:
                     warnings.warn(f'Scaling algorithm {sc} not recognised')
         else:
-            raise ValueError('scaler parameter should be string, list or tuple')
+            raise ValueError(
+                'scaler parameter should be string, list or tuple'
+            )
         if not self.scaler:
             warnings.warn(
-                f'No valid scaling algorithms provided, defaulting to None'
+                'No valid scaling algorithms provided, defaulting to None'
             )
             self.scaler.append('None')
 
@@ -415,14 +418,22 @@ class Calibrate:
         ```
 
         """
+        self.folds: int = folds
+        """
+        The number of folds used in k-fold cross validation
+        """
 
     def _sklearn_regression_meta(
-            self,
-            reg: Union[skl.base.RegressorMixin, Literal['t', 'gaussian']],
-            name: str,
-            min_coeffs: int = 1,
-            max_coeffs: int = (sys.maxsize * 2) + 1,
-            **kwargs
+        self,
+        reg: Union[
+            skl.base.RegressorMixin,
+            RandomizedSearchCV,
+            Literal['t', 'gaussian']
+        ],
+        name: str,
+        min_coeffs: int = 1,
+        max_coeffs: int = (sys.maxsize * 2) + 1,
+        random_search: bool = False
             ):
         """
         Metaclass, formats data and uses sklearn classifier to
@@ -438,6 +449,8 @@ class Calibrate:
             Minimum number of coefficients for technique.
         max_coeffs : int, default=(sys.maxsize * 2) + 1
             Maximum number of coefficients for technique.
+        random_search : bool
+            Whether RandomizedSearch is used or not
 
         Raises
         ------
@@ -457,18 +470,35 @@ class Calibrate:
         for scaler in self.scaler:
             if self.models[name].get(scaler) is None:
                 self.models[name][scaler] = dict()
-                # If the scaling technique hasn't been used with the classification
+                # If the scaling technique hasn't been used with the
+                # classification
                 # technique yet, add its key to the nested dictionary
             for sec_vals in secondary_vals:
                 # Loop over all combinations of secondary values
                 vals = [self.target] + [v for v in sec_vals if v == v]
                 vals_str = ' + '.join(vals)
                 if len(vals) < min_coeffs or len(vals) > max_coeffs:
-                    # Skip if number of coeffs doesn't lie within acceptable range
+                    # Skip if number of coeffs doesn't lie within acceptable
+                    # range
                     # for technique. For example, isotonic regression
                     # only works with one variable
                     continue
                 self.models[name][scaler][vals_str] = dict()
+                if random_search:
+                    pipeline = Pipeline([
+                        ("Selector", ColumnTransformer([
+                                ("selector", "passthrough", vals)
+                            ], remainder="drop")
+                         ),
+                        ("Scaler", self.scaler_list[scaler]),
+                        ("Regression", reg)
+                        ])
+                    pipeline.fit(
+                        self.x_data,
+                        self.y_data
+                            )
+                    self.models[name][scaler][vals_str][0] = dc(pipeline)
+
                 for fold in self.y_data.loc[:, 'Fold'].unique():
                     y_data = self.y_data[
                             self.y_data.loc[:, 'Fold'] != fold
@@ -478,8 +508,8 @@ class Calibrate:
                         # format data and build model using bambi
                         # then store result in pipeline
                         # Currently doesn't work as PyMC models
-                        # can't be pickled, so don't function with deepcopy. Needs
-                        # looking into
+                        # can't be pickled, so don't function with deepcopy.
+                        # Needs looking into
                         raise NotImplementedError(
                             "PyMC functions currently don't work with deepcopy"
                         )
@@ -547,9 +577,9 @@ class Calibrate:
                 - Student T
         """
         # Define model families
-        model_families = {
-            "Gaussian": "gaussian",
-            "Student T": "t"
+        model_families: dict[str, Literal['t', 'gaussian']] = {
+            "Gaussian": 'gaussian',
+            "Student T": 't'
         }
         self._sklearn_regression_meta(
                 model_families[family],
@@ -557,7 +587,20 @@ class Calibrate:
                 **kwargs
         )
 
-    def linreg(self, name: str = "Linear Regression", **kwargs):
+    def linreg(
+        self,
+        name: str = "Linear Regression",
+        random_search: bool = False,
+        parameters: dict[
+            str,
+            Union[
+                scipy.stats.rv_continuous,
+                List[Union[int, str, float]]
+            ]
+        ] = {
+        },
+        **kwargs
+            ):
         """
         Fit x on y via linear regression
 
@@ -565,80 +608,186 @@ class Calibrate:
         ----------
         name : str, default="Linear Regression"
             Name of classification technique.
+        random_search : bool, default=False
+            Whether to perform RandomizedSearch to optimise parameters
+        parameters : dict[
+                str,
+                Union[
+                    scipy.stats.rv_continuous,
+                    List[Union[int, str, float]]
+                ]
+            ], default=Preset distributions
+            The parameters used in RandomizedSearchCV
         """
-        self._sklearn_regression_meta(
+        if random_search:
+            classifier = RandomizedSearchCV(
                 lm.LinearRegression(**kwargs),
-                name
-                )
+                parameters,
+                cv=self.folds
+            )
+        else:
+            classifier = lm.LinearRegression(**kwargs)
+        self._sklearn_regression_meta(
+            classifier,
+            f'{name}{" (Random Search)" if random_search else ""}',
+            random_search=random_search
+        )
 
-    def ridge(self, name: str = "Ridge Regression", **kwargs):
+    def ridge(
+        self,
+        name: str = "Ridge Regression",
+        random_search: bool = False,
+        parameters: dict[
+            str,
+            Union[
+                scipy.stats.rv_continuous,
+                List[Union[int, str, float]]
+            ]
+        ] = {
+        },
+        **kwargs
+            ):
         """
         Fit x on y via ridge regression
 
         Parameters
         ----------
         name : str, default="Ridge Regression"
-            Name of classification technique
+            Name of classification technique.
+        random_search : bool, default=False
+            Whether to perform RandomizedSearch to optimise parameters
+        parameters : dict[
+                str,
+                Union[
+                    scipy.stats.rv_continuous,
+                    List[Union[int, str, float]]
+                ]
+            ], default=Preset distributions
+            The parameters used in RandomizedSearchCV
         """
-        self._sklearn_regression_meta(
+        if random_search:
+            classifier = RandomizedSearchCV(
                 lm.Ridge(**kwargs),
-                name
-                )
+                parameters,
+                cv=self.folds
+            )
+        else:
+            classifier = lm.Ridge(**kwargs)
+        self._sklearn_regression_meta(
+            classifier,
+            f'{name}{" (Random Search)" if random_search else ""}',
+            random_search=random_search
+        )
 
     def ridge_cv(
             self,
             name: str = "Ridge Regression (Cross Validated)",
+            random_search: bool = False,
             **kwargs
             ):
         """
-        Fit x on y via cross-validated ridge regression
+        Fit x on y via cross-validated ridge regression.
+        Already cross validated so random search not required
 
         Parameters
         ----------
         name : str, default="Ridge Regression (Cross Validated)"
             Name of classification technique
-        """
-        self._sklearn_regression_meta(
-                lm.RidgeCV(**kwargs),
-                name
-                )
+        random_search : bool, default=False
+            Not used
 
-    def lasso(self, name: str = "Lasso Regression", **kwargs):
+        """
+        _ = random_search
+        self._sklearn_regression_meta(
+            lm.RidgeCV(**kwargs, cv=self.folds),
+            name,
+            random_search=True
+        )
+
+    def lasso(
+        self,
+        name: str = "Lasso Regression",
+        random_search: bool = False,
+        parameters: dict[
+            str,
+            Union[
+                scipy.stats.rv_continuous,
+                List[Union[int, str, float]]
+            ]
+        ] = {
+        },
+        **kwargs
+            ):
         """
         Fit x on y via lasso regression
 
         Parameters
         ----------
         name : str, default="Lasso Regression"
-            Name of classification technique
+            Name of classification technique.
+        random_search : bool, default=False
+            Whether to perform RandomizedSearch to optimise parameters
+        parameters : dict[
+                str,
+                Union[
+                    scipy.stats.rv_continuous,
+                    List[Union[int, str, float]]
+                ]
+            ], default=Preset distributions
+            The parameters used in RandomizedSearchCV
         """
-        self._sklearn_regression_meta(
+        if random_search:
+            classifier = RandomizedSearchCV(
                 lm.Lasso(**kwargs),
-                name
-                )
+                parameters,
+                cv=self.folds
+            )
+        else:
+            classifier = lm.Lasso(**kwargs)
+        self._sklearn_regression_meta(
+            classifier,
+            f'{name}{" (Random Search)" if random_search else ""}',
+            random_search=random_search
+        )
 
     def lasso_cv(
             self,
             name: str = "Lasso Regression (Cross Validated)",
+            random_search: bool = False,
             **kwargs
             ):
         """
-        Fit x on y via cross-validated lasso regression
+        Fit x on y via cross-validated lasso regression.
+        Already cross validated so random search not required
 
         Parameters
         ----------
         name : str, default="Lasso Regression (Cross Validated)"
             Name of classification technique
+        random_search : bool, default=False
+            Not used
+
         """
+        _ = random_search
         self._sklearn_regression_meta(
-                lm.LassoCV(**kwargs),
-                name
-                )
+            lm.LassoCV(**kwargs, cv=self.folds),
+            name,
+            random_search=True
+        )
 
     def multi_task_lasso(
-            self,
-            name: str = "Multi-task Lasso Regression",
-            **kwargs
+        self,
+        name: str = "Multi-task Lasso Regression",
+        random_search: bool = False,
+        parameters: dict[
+            str,
+            Union[
+                scipy.stats.rv_continuous,
+                List[Union[int, str, float]]
+            ]
+        ] = {
+        },
+        **kwargs
             ):
         """
         Fit x on y via multitask lasso regression
@@ -646,101 +795,213 @@ class Calibrate:
         Parameters
         ----------
         name : str, default="Multi-task Lasso Regression"
-            Name of classification technique
+            Name of classification technique.
+        random_search : bool, default=False
+            Whether to perform RandomizedSearch to optimise parameters
+        parameters : dict[
+                str,
+                Union[
+                    scipy.stats.rv_continuous,
+                    List[Union[int, str, float]]
+                ]
+            ], default=Preset distributions
+            The parameters used in RandomizedSearchCV
         """
-        self._sklearn_regression_meta(
+        if random_search:
+            classifier = RandomizedSearchCV(
                 lm.MultiTaskLasso(**kwargs),
-                name
-                )
+                parameters,
+                cv=self.folds
+            )
+        else:
+            classifier = lm.MultiTaskLasso(**kwargs)
+        self._sklearn_regression_meta(
+            classifier,
+            f'{name}{" (Random Search)" if random_search else ""}',
+            random_search=random_search
+        )
 
     def multi_task_lasso_cv(
             self,
             name: str = "Multi-task Lasso Regression (Cross Validated)",
+            random_search: bool = False,
             **kwargs
             ):
         """
-        Fit x on y via cross validated multitask lasso regression
+        Fit x on y via cross-validated multitask lasso regression.
+        Already cross validated so random search not required
 
         Parameters
         ----------
         name : str, default="Multi-task Lasso Regression (Cross Validated)"
             Name of classification technique
-        """
-        self._sklearn_regression_meta(
-                lm.MultiTaskLassoCV(**kwargs),
-                name
-                )
+        random_search : bool, default=False
+            Not used
 
-    def elastic_net(self, name: str = "Elastic Net Regression", **kwargs):
+        """
+        _ = random_search
+        self._sklearn_regression_meta(
+            lm.MultiTaskLassoCV(**kwargs, cv=self.folds),
+            name,
+            random_search=True
+        )
+
+    def elastic_net(
+        self,
+        name: str = "Elastic Net Regression",
+        random_search: bool = False,
+        parameters: dict[
+            str,
+            Union[
+                scipy.stats.rv_continuous,
+                List[Union[int, str, float]]
+            ]
+        ] = {
+        },
+        **kwargs
+            ):
         """
         Fit x on y via elastic net regression
 
         Parameters
         ----------
         name : str, default="Elastic Net Regression"
-            Name of classification technique
+            Name of classification technique.
+        random_search : bool, default=False
+            Whether to perform RandomizedSearch to optimise parameters
+        parameters : dict[
+                str,
+                Union[
+                    scipy.stats.rv_continuous,
+                    List[Union[int, str, float]]
+                ]
+            ], default=Preset distributions
+            The parameters used in RandomizedSearchCV
         """
-        self._sklearn_regression_meta(
+        if random_search:
+            classifier = RandomizedSearchCV(
                 lm.ElasticNet(**kwargs),
-                name
-                )
+                parameters,
+                cv=self.folds
+            )
+        else:
+            classifier = lm.ElasticNet(**kwargs)
+        self._sklearn_regression_meta(
+            classifier,
+            f'{name}{" (Random Search)" if random_search else ""}',
+            random_search=random_search
+        )
 
     def elastic_net_cv(
             self,
             name: str = "Elastic Net Regression (Cross Validated)",
+            random_search: bool = False,
             **kwargs
             ):
         """
-        Fit x on y via cross validated elastic net regression
+        Fit x on y via cross-validated elastic regression.
+        Already cross validated so random search not required
 
         Parameters
         ----------
-        name : str, default="Elastic Net Regression (Cross Validated)"
+        name : str, default="Lasso Regression (Cross Validated)"
             Name of classification technique
+        random_search : bool, default=False
+            Not used
         """
+        _ = random_search
         self._sklearn_regression_meta(
-                lm.ElasticNetCV(**kwargs),
-                name
-                )
+            lm.ElasticNetCV(**kwargs, cv=self.folds),
+            name,
+            random_search=True
+        )
 
     def multi_task_elastic_net(
-            self,
-            name: str = "Multi-Task Elastic Net Regression",
-            **kwargs
+        self,
+        name: str = "Multi-task Elastic Net Regression",
+        random_search: bool = False,
+        parameters: dict[
+            str,
+            Union[
+                scipy.stats.rv_continuous,
+                List[Union[int, str, float]]
+            ]
+        ] = {
+        },
+        **kwargs
             ):
         """
-        Fit x on y via multi-task elastic net regression
+        Fit x on y via elastic net regression
 
         Parameters
         ----------
         name : str, default="Multi-task Elastic Net Regression"
-            Name of classification technique
+            Name of classification technique.
+        random_search : bool, default=False
+            Whether to perform RandomizedSearch to optimise parameters
+        parameters : dict[
+                str,
+                Union[
+                    scipy.stats.rv_continuous,
+                    List[Union[int, str, float]]
+                ]
+            ], default=Preset distributions
+            The parameters used in RandomizedSearchCV
         """
-        self._sklearn_regression_meta(
+        if random_search:
+            classifier = RandomizedSearchCV(
                 lm.MultiTaskElasticNet(**kwargs),
-                name
-                )
+                parameters,
+                cv=self.folds
+            )
+        else:
+            classifier = lm.MultiTaskElasticNet(**kwargs)
+        self._sklearn_regression_meta(
+            classifier,
+            f'{name}{" (Random Search)" if random_search else ""}',
+            random_search=random_search
+        )
 
     def multi_task_elastic_net_cv(
             self,
             name: str = "Multi-Task Elastic Net Regression (Cross Validated)",
+            random_search: bool = False,
             **kwargs
             ):
         """
-        Fit x on y via cross validated multi-task elastic net regression
+        Fit x on y via cross-validated multi-task elastic net regression.
+        Already cross validated so random search not required
 
         Parameters
         ----------
-        name : str, default="Multi-Task Elastic Net Regression\
+        name : str, default="Multi-Task Elastic Net Regression \
         (Cross Validated)"
             Name of classification technique
-        """
-        self._sklearn_regression_meta(
-                lm.MultiTaskElasticNetCV(**kwargs),
-                name
-                )
+        random_search : bool, default=False
+            Not used
 
-    def lars(self, name: str = "Least Angle Regression", **kwargs):
+        """
+        _ = random_search
+        self._sklearn_regression_meta(
+            lm.MultiTaskElasticNetCV(**kwargs, cv=self.folds),
+            name,
+            random_search=True
+        )
+
+    def lars(
+        self,
+        name: str = "Least Angle Regression",
+        random_search: bool = False,
+        parameters: dict[
+            str,
+            Union[
+                scipy.stats.rv_continuous,
+                List[Union[int, str, float]]
+            ]
+        ] = {
+        },
+        **kwargs
+            ):
         """
         Fit x on y via least angle regression
 
@@ -748,49 +1009,137 @@ class Calibrate:
         ----------
         name : str, default="Least Angle Regression"
             Name of classification technique.
+        random_search : bool, default=False
+            Whether to perform RandomizedSearch to optimise parameters
+        parameters : dict[
+                str,
+                Union[
+                    scipy.stats.rv_continuous,
+                    List[Union[int, str, float]]
+                ]
+            ], default=Preset distributions
+            The parameters used in RandomizedSearchCV
         """
-        self._sklearn_regression_meta(
+        if random_search:
+            classifier = RandomizedSearchCV(
                 lm.Lars(**kwargs),
-                name
-                )
+                parameters,
+                cv=self.folds
+            )
+        else:
+            classifier = lm.Lars(**kwargs)
+        self._sklearn_regression_meta(
+            classifier,
+            f'{name}{" (Random Search)" if random_search else ""}',
+            random_search=random_search
+        )
 
     def lars_lasso(
-            self,
-            name: str = "Least Angle Regression (Lasso)",
-            **kwargs
+        self,
+        name: str = "Least Angle Lasso Regression",
+        random_search: bool = False,
+        parameters: dict[
+            str,
+            Union[
+                scipy.stats.rv_continuous,
+                List[Union[int, str, float]]
+            ]
+        ] = {
+        },
+        **kwargs
             ):
         """
-        Fit x on y via lasso least angle regression
+        Fit x on y via least angle lasso regression
 
         Parameters
         ----------
-        name : str, default="Least Angle Regression (Lasso)"
-            Name of classification technique
+        name : str, default="Least Angle Lasso Regression"
+            Name of classification technique.
+        random_search : bool, default=False
+            Whether to perform RandomizedSearch to optimise parameters
+        parameters : dict[
+                str,
+                Union[
+                    scipy.stats.rv_continuous,
+                    List[Union[int, str, float]]
+                ]
+            ], default=Preset distributions
+            The parameters used in RandomizedSearchCV
         """
-        self._sklearn_regression_meta(
+        if random_search:
+            classifier = RandomizedSearchCV(
                 lm.LassoLars(**kwargs),
-                name
-                )
+                parameters,
+                cv=self.folds
+            )
+        else:
+            classifier = lm.LassoLars(**kwargs)
+        self._sklearn_regression_meta(
+            classifier,
+            f'{name}{" (Random Search)" if random_search else ""}',
+            random_search=random_search
+        )
 
-    def omp(self, name: str = "Orthogonal Matching Pursuit", **kwargs):
+    def omp(
+        self,
+        name: str = "Orthogonal Matching Pursuit",
+        random_search: bool = False,
+        parameters: dict[
+            str,
+            Union[
+                scipy.stats.rv_continuous,
+                List[Union[int, str, float]]
+            ]
+        ] = {
+        },
+        **kwargs
+            ):
         """
         Fit x on y via orthogonal matching pursuit regression
 
         Parameters
         ----------
         name : str, default="Orthogonal Matching Pursuit"
-            Name of classification technique
+            Name of classification technique.
+        random_search : bool, default=False
+            Whether to perform RandomizedSearch to optimise parameters
+        parameters : dict[
+                str,
+                Union[
+                    scipy.stats.rv_continuous,
+                    List[Union[int, str, float]]
+                ]
+            ], default=Preset distributions
+            The parameters used in RandomizedSearchCV
         """
-        self._sklearn_regression_meta(
+        if random_search:
+            classifier = RandomizedSearchCV(
                 lm.OrthogonalMatchingPursuit(**kwargs),
-                name,
-                min_coeffs=2
-                )
+                parameters,
+                cv=self.folds
+            )
+        else:
+            classifier = lm.OrthogonalMatchingPursuit(**kwargs)
+        self._sklearn_regression_meta(
+            classifier,
+            f'{name}{" (Random Search)" if random_search else ""}',
+            random_search=random_search,
+            min_coeffs=2
+        )
 
     def bayesian_ridge(
-                self,
-                name: str = "Bayesian Ridge Regression",
-                **kwargs
+        self,
+        name: str = "Bayesian Ridge Regression",
+        random_search: bool = False,
+        parameters: dict[
+            str,
+            Union[
+                scipy.stats.rv_continuous,
+                List[Union[int, str, float]]
+            ]
+        ] = {
+        },
+        **kwargs
             ):
         """
         Fit x on y via bayesian ridge regression
@@ -799,16 +1148,48 @@ class Calibrate:
         ----------
         name : str, default="Bayesian Ridge Regression"
             Name of classification technique.
+        random_search : bool, default=False
+            Whether to perform RandomizedSearch to optimise parameters
+        parameters : dict[
+                str,
+                Union[
+                    scipy.stats.rv_continuous,
+                    List[Union[int, str, float]]
+                ]
+            ], default=Preset distributions
+            The parameters used in RandomizedSearchCV
         """
-        self._sklearn_regression_meta(
+        if random_search:
+            classifier = RandomizedSearchCV(
                 lm.BayesianRidge(**kwargs),
-                name
-                )
+                parameters,
+                cv=self.folds
+            )
+        else:
+            classifier = lm.BayesianRidge(**kwargs)
+        self._sklearn_regression_meta(
+            classifier,
+            f'{name}{" (Random Search)" if random_search else ""}',
+            random_search=random_search
+        )
 
     def bayesian_ard(
-            self,
-            name: str = "Bayesian Automatic Relevance Detection",
-            **kwargs
+        self,
+        name: str = "Bayesian Automatic Relevance Detection",
+        random_search: bool = False,
+        parameters: dict[
+            str,
+            Union[
+                scipy.stats.rv_continuous,
+                List[Union[int, str, float]]
+            ]
+        ] = {
+            'alpha_1': uniform(loc=0, scale=1),
+            'alpha_2': uniform(loc=0, scale=1),
+            'lambda_1': uniform(loc=0, scale=1),
+            'lambda_2': uniform(loc=0, scale=1)
+        },
+        **kwargs
             ):
         """
         Fit x on y via bayesian automatic relevance detection
@@ -817,13 +1198,44 @@ class Calibrate:
         ----------
         name : str, default="Bayesian Automatic Relevance Detection"
             Name of classification technique.
+        random_search : bool, default=False
+            Whether to perform RandomizedSearch to optimise parameters
+        parameters : dict[
+                str,
+                Union[
+                    scipy.stats.rv_continuous,
+                    List[Union[int, str, float]]
+                ]
+            ], default=Preset distributions
+            The parameters used in RandomizedSearchCV
         """
-        self._sklearn_regression_meta(
+        if random_search:
+            classifier = RandomizedSearchCV(
                 lm.ARDRegression(**kwargs),
-                name
+                parameters,
+                cv=self.folds
+            )
+        else:
+            classifier = lm.ARDRegression(**kwargs)
+        self._sklearn_regression_meta(
+                classifier,
+                f'{name}{" (Random Search)" if random_search else ""}'
                 )
 
-    def tweedie(self, name: str = "Tweedie Regression", **kwargs):
+    def tweedie(
+        self,
+        name: str = "Tweedie Regression",
+        random_search: bool = False,
+        parameters: dict[
+            str,
+            Union[
+                scipy.stats.rv_continuous,
+                List[Union[int, str, float]]
+            ]
+        ] = {
+        },
+        **kwargs
+            ):
         """
         Fit x on y via tweedie regression
 
@@ -831,63 +1243,183 @@ class Calibrate:
         ----------
         name : str, default="Tweedie Regression"
             Name of classification technique.
+        random_search : bool, default=False
+            Whether to perform RandomizedSearch to optimise parameters
+        parameters : dict[
+                str,
+                Union[
+                    scipy.stats.rv_continuous,
+                    List[Union[int, str, float]]
+                ]
+            ], default=Preset distributions
+            The parameters used in RandomizedSearchCV
         """
-        self._sklearn_regression_meta(
+        if random_search:
+            classifier = RandomizedSearchCV(
                 lm.TweedieRegressor(**kwargs),
-                name
-                )
+                parameters,
+                cv=self.folds
+            )
+        else:
+            classifier = lm.TweedieRegressor(**kwargs)
+        self._sklearn_regression_meta(
+            classifier,
+            f'{name}{" (Random Search)" if random_search else ""}',
+            random_search=random_search
+        )
 
     def stochastic_gradient_descent(
-            self,
-            name: str = "Stochastic Gradient Descent",
-            **kwargs
+        self,
+        name: str = "Stochastic Gradient Descent",
+        random_search: bool = False,
+        parameters: dict[
+            str,
+            Union[
+                scipy.stats.rv_continuous,
+                List[Union[int, str, float]]
+            ]
+        ] = {
+        },
+        **kwargs
+            ):
+        """
+        Fit x on y via stochastic gradient descent
+
+        Parameters
+        ----------
+        name : str, default="Stochastic Gradient Descent"
+            Name of classification technique.
+        random_search : bool, default=False
+            Whether to perform RandomizedSearch to optimise parameters
+        parameters : dict[
+                str,
+                Union[
+                    scipy.stats.rv_continuous,
+                    List[Union[int, str, float]]
+                ]
+            ], default=Preset distributions
+            The parameters used in RandomizedSearchCV
+        """
+        if random_search:
+            classifier = RandomizedSearchCV(
+                lm.SGDRegressor(**kwargs),
+                parameters,
+                cv=self.folds
+            )
+        else:
+            classifier = lm.SGDRegressor(**kwargs)
+        self._sklearn_regression_meta(
+            classifier,
+            f'{name}{" (Random Search)" if random_search else ""}',
+            random_search=random_search
+        )
+
+    def passive_aggressive(
+        self,
+        name: str = "Passive Aggressive Regression",
+        random_search: bool = False,
+        parameters: dict[
+            str,
+            Union[
+                scipy.stats.rv_continuous,
+                List[Union[int, str, float]]
+            ]
+        ] = {
+        },
+        **kwargs
             ):
         """
         Fit x on y via stochastic gradient descent regression
 
         Parameters
         ----------
-        name : str, default="Stochastic Gradient Descent"
+        name : str, default="Passive Aggressive Regression"
             Name of classification technique.
+        random_search : bool, default=False
+            Whether to perform RandomizedSearch to optimise parameters
+        parameters : dict[\
+                str,\
+                Union[\
+                    scipy.stats.rv_continuous,\
+                    List[Union[int, str, float]]\
+                ]\
+            ], default=Preset distributions
+            The parameters used in RandomizedSearchCV
         """
+        if random_search:
+            classifier = RandomizedSearchCV(
+                lm.PassiveAggressiveRegressor(**kwargs),
+                parameters,
+                cv=self.folds
+            )
+        else:
+            classifier = lm.PassiveAggressiveRegressor(**kwargs)
         self._sklearn_regression_meta(
-                lm.SGDRegressor(**kwargs),
-                name
-                )
+            classifier,
+            f'{name}{" (Random Search)" if random_search else ""}',
+            random_search=random_search
+        )
 
-    def passive_aggressive(
-            self,
-            name: str = "Passive Agressive Regression",
-            **kwargs
+    def ransac(
+        self,
+        name: str = "RANSAC",
+        random_search: bool = False,
+        parameters: dict[
+            str,
+            Union[
+                scipy.stats.rv_continuous,
+                List[Union[int, str, float]]
+            ]
+        ] = {
+        },
+        **kwargs
             ):
         """
-        Fit x on y via passive aggressive regression
-
-        Parameters
-        ----------
-        name : str, default="Passive Agressive Regression"
-            Name of classification technique.
-        """
-        self._sklearn_regression_meta(
-                lm.PassiveAggressiveRegressor(**kwargs),
-                name
-                )
-
-    def ransac(self, name: str = "RANSAC", **kwargs):
-        """
-        Fit x on y via RANSAC regression
+        Fit x on y via ransac
 
         Parameters
         ----------
         name : str, default="RANSAC"
             Name of classification technique.
+        random_search : bool, default=False
+            Whether to perform RandomizedSearch to optimise parameters
+        parameters : dict[\
+                str,\
+                Union[\
+                    scipy.stats.rv_continuous,\
+                    List[Union[int, str, float]]\
+                ]\
+            ], default=Preset distributions
+            The parameters used in RandomizedSearchCV
         """
-        self._sklearn_regression_meta(
+        if random_search:
+            classifier = RandomizedSearchCV(
                 lm.RANSACRegressor(**kwargs),
-                name
-                )
+                parameters,
+                cv=self.folds
+            )
+        else:
+            classifier = lm.RANSACRegressor(**kwargs)
+        self._sklearn_regression_meta(
+            classifier,
+            f'{name}{" (Random Search)" if random_search else ""}',
+            random_search=random_search
+        )
 
-    def theil_sen(self, name: str = "Theil-Sen Regression", **kwargs):
+    def theil_sen(
+        self,
+        name: str = "Theil-Sen Regression",
+        random_search: bool = False,
+        parameters: dict[
+            str,
+            Union[
+                scipy.stats.rv_continuous,
+                List[Union[int, str, float]]
+            ]
+        ] = {
+        },
+        **kwargs
+            ):
         """
         Fit x on y via theil-sen regression
 
@@ -895,14 +1427,45 @@ class Calibrate:
         ----------
         name : str, default="Theil-Sen Regression"
             Name of classification technique.
-        -Sen Regression
+        random_search : bool, default=False
+            Whether to perform RandomizedSearch to optimise parameters
+        parameters : dict[\
+                str,\
+                Union[\
+                    scipy.stats.rv_continuous,\
+                    List[Union[int, str, float]]\
+                ]\
+            ], default=Preset distributions
+            The parameters used in RandomizedSearchCV
         """
-        self._sklearn_regression_meta(
+        if random_search:
+            classifier = RandomizedSearchCV(
                 lm.TheilSenRegressor(**kwargs),
-                name
-                )
+                parameters,
+                cv=self.folds
+            )
+        else:
+            classifier = lm.TheilSenRegressor(**kwargs)
+        self._sklearn_regression_meta(
+            classifier,
+            f'{name}{" (Random Search)" if random_search else ""}',
+            random_search=random_search
+        )
 
-    def huber(self, name: str = "Huber Regression", **kwargs):
+    def huber(
+        self,
+        name: str = "Huber Regression",
+        random_search: bool = False,
+        parameters: dict[
+            str,
+            Union[
+                scipy.stats.rv_continuous,
+                List[Union[int, str, float]]
+            ]
+        ] = {
+        },
+        **kwargs
+            ):
         """
         Fit x on y via huber regression
 
@@ -910,13 +1473,45 @@ class Calibrate:
         ----------
         name : str, default="Huber Regression"
             Name of classification technique.
+        random_search : bool, default=False
+            Whether to perform RandomizedSearch to optimise parameters
+        parameters : dict[\
+                str,\
+                Union[\
+                    scipy.stats.rv_continuous,\
+                    List[Union[int, str, float]]\
+                ]\
+            ], default=Preset distributions
+            The parameters used in RandomizedSearchCV
         """
-        self._sklearn_regression_meta(
+        if random_search:
+            classifier = RandomizedSearchCV(
                 lm.HuberRegressor(**kwargs),
-                name
-                )
+                parameters,
+                cv=self.folds
+            )
+        else:
+            classifier = lm.HuberRegressor(**kwargs)
+        self._sklearn_regression_meta(
+            classifier,
+            f'{name}{" (Random Search)" if random_search else ""}',
+            random_search=random_search
+        )
 
-    def quantile(self, name: str = "Quantile Regression", **kwargs):
+    def quantile(
+        self,
+        name: str = "Quantile Regression",
+        random_search: bool = False,
+        parameters: dict[
+            str,
+            Union[
+                scipy.stats.rv_continuous,
+                List[Union[int, str, float]]
+            ]
+        ] = {
+        },
+        **kwargs
+            ):
         """
         Fit x on y via quantile regression
 
@@ -924,256 +1519,720 @@ class Calibrate:
         ----------
         name : str, default="Quantile Regression"
             Name of classification technique.
+        random_search : bool, default=False
+            Whether to perform RandomizedSearch to optimise parameters
+        parameters : dict[\
+                str,\
+                Union[\
+                    scipy.stats.rv_continuous,\
+                    List[Union[int, str, float]]\
+                ]\
+            ], default=Preset distributions
+            The parameters used in RandomizedSearchCV
         """
-        self._sklearn_regression_meta(
+        if random_search:
+            classifier = RandomizedSearchCV(
                 lm.QuantileRegressor(**kwargs),
-                name
-                )
+                parameters,
+                cv=self.folds
+            )
+        else:
+            classifier = lm.QuantileRegressor(**kwargs)
+        self._sklearn_regression_meta(
+            classifier,
+            f'{name}{" (Random Search)" if random_search else ""}',
+            random_search=random_search
+        )
 
-    def decision_tree(self, name: str = "Decision Tree", **kwargs):
+    def decision_tree(
+        self,
+        name: str = "Decision Tree",
+        random_search: bool = False,
+        parameters: dict[
+            str,
+            Union[
+                scipy.stats.rv_continuous,
+                List[Union[int, str, float]]
+            ]
+        ] = {
+        },
+        **kwargs
+            ):
         """
-        Fit x on y using a decision tree
+        Fit x on y via decision tree
 
         Parameters
         ----------
         name : str, default="Decision Tree"
             Name of classification technique.
+        random_search : bool, default=False
+            Whether to perform RandomizedSearch to optimise parameters
+        parameters : dict[\
+                str,\
+                Union[\
+                    scipy.stats.rv_continuous,\
+                    List[Union[int, str, float]]\
+                ]\
+            ], default=Preset distributions
+            The parameters used in RandomizedSearchCV
         """
-        self._sklearn_regression_meta(
+        if random_search:
+            classifier = RandomizedSearchCV(
                 tree.DecisionTreeRegressor(**kwargs),
-                name
-                )
+                parameters,
+                cv=self.folds
+            )
+        else:
+            classifier = tree.DecisionTreeRegressor(**kwargs)
+        self._sklearn_regression_meta(
+            classifier,
+            f'{name}{" (Random Search)" if random_search else ""}',
+            random_search=random_search
+        )
 
-    def extra_tree(self, name: str = "Extra Tree", **kwargs):
+    def extra_tree(
+        self,
+        name: str = "Extra Tree",
+        random_search: bool = False,
+        parameters: dict[
+            str,
+            Union[
+                scipy.stats.rv_continuous,
+                List[Union[int, str, float]]
+            ]
+        ] = {
+        },
+        **kwargs
+            ):
         """
-        Fit x on y using an extra tree
+        Fit x on y via extra tree
 
         Parameters
         ----------
         name : str, default="Extra Tree"
             Name of classification technique.
+        random_search : bool, default=False
+            Whether to perform RandomizedSearch to optimise parameters
+        parameters : dict[\
+                str,\
+                Union[\
+                    scipy.stats.rv_continuous,\
+                    List[Union[int, str, float]]\
+                ]\
+            ], default=Preset distributions
+            The parameters used in RandomizedSearchCV
         """
-        self._sklearn_regression_meta(
+        if random_search:
+            classifier = RandomizedSearchCV(
                 tree.ExtraTreeRegressor(**kwargs),
-                name
-                )
+                parameters,
+                cv=self.folds
+            )
+        else:
+            classifier = tree.ExtraTreeRegressor(**kwargs)
+        self._sklearn_regression_meta(
+            classifier,
+            f'{name}{" (Random Search)" if random_search else ""}',
+            random_search=random_search
+        )
 
-    def random_forest(self, name: str = "Random Forest", **kwargs):
+    def random_forest(
+        self,
+        name: str = "Random Forest",
+        random_search: bool = False,
+        parameters: dict[
+            str,
+            Union[
+                scipy.stats.rv_continuous,
+                List[Union[int, str, float]]
+            ]
+        ] = {
+        },
+        **kwargs
+            ):
         """
-        Fit x on y using a random forest
+        Fit x on y via random forest
 
         Parameters
         ----------
         name : str, default="Random Forest"
             Name of classification technique.
+        random_search : bool, default=False
+            Whether to perform RandomizedSearch to optimise parameters
+        parameters : dict[\
+                str,\
+                Union[\
+                    scipy.stats.rv_continuous,\
+                    List[Union[int, str, float]]\
+                ]\
+            ], default=Preset distributions
+            The parameters used in RandomizedSearchCV
         """
-        self._sklearn_regression_meta(
+        if random_search:
+            classifier = RandomizedSearchCV(
                 en.RandomForestRegressor(**kwargs),
-                name
-                )
+                parameters,
+                cv=self.folds
+            )
+        else:
+            classifier = en.RandomForestRegressor(**kwargs)
+        self._sklearn_regression_meta(
+            classifier,
+            f'{name}{" (Random Search)" if random_search else ""}',
+            random_search=random_search
+        )
 
     def extra_trees_ensemble(
-            self,
-            name: str = "Extra Trees Ensemble",
-            **kwargs
+        self,
+        name: str = "Extra Trees Ensemble",
+        random_search: bool = False,
+        parameters: dict[
+            str,
+            Union[
+                scipy.stats.rv_continuous,
+                List[Union[int, str, float]]
+            ]
+        ] = {
+        },
+        **kwargs
             ):
         """
-        Fit x on y using an ensemble of extra trees
+        Fit x on y via extra trees ensemble
 
         Parameters
         ----------
         name : str, default="Extra Trees Ensemble"
             Name of classification technique.
+        random_search : bool, default=False
+            Whether to perform RandomizedSearch to optimise parameters
+        parameters : dict[\
+                str,\
+                Union[\
+                    scipy.stats.rv_continuous,\
+                    List[Union[int, str, float]]\
+                ]\
+            ], default=Preset distributions
+            The parameters used in RandomizedSearchCV
         """
-        self._sklearn_regression_meta(
+        if random_search:
+            classifier = RandomizedSearchCV(
                 en.ExtraTreesRegressor(**kwargs),
-                name
-                )
+                parameters,
+                cv=self.folds
+            )
+        else:
+            classifier = en.ExtraTreesRegressor(**kwargs)
+        self._sklearn_regression_meta(
+            classifier,
+            f'{name}{" (Random Search)" if random_search else ""}',
+            random_search=random_search
+        )
 
     def gradient_boost_regressor(
-            self,
-            name: str = "Gradient Boosting Regression",
-            **kwargs
+        self,
+        name: str = "Gradient Boosting Regression",
+        random_search: bool = False,
+        parameters: dict[
+            str,
+            Union[
+                scipy.stats.rv_continuous,
+                List[Union[int, str, float]]
+            ]
+        ] = {
+        },
+        **kwargs
             ):
         """
-        Fit x on y using gradient boosting regression
+        Fit x on y via gradient boosting regression
 
         Parameters
         ----------
         name : str, default="Gradient Boosting Regression"
             Name of classification technique.
+        random_search : bool, default=False
+            Whether to perform RandomizedSearch to optimise parameters
+        parameters : dict[\
+                str,\
+                Union[\
+                    scipy.stats.rv_continuous,\
+                    List[Union[int, str, float]]\
+                ]\
+            ], default=Preset distributions
+            The parameters used in RandomizedSearchCV
         """
-        self._sklearn_regression_meta(
+        if random_search:
+            classifier = RandomizedSearchCV(
                 en.GradientBoostingRegressor(**kwargs),
-                name
-                )
+                parameters,
+                cv=self.folds
+            )
+        else:
+            classifier = en.GradientBoostingRegressor(**kwargs)
+        self._sklearn_regression_meta(
+            classifier,
+            f'{name}{" (Random Search)" if random_search else ""}',
+            random_search=random_search
+        )
 
     def hist_gradient_boost_regressor(
-            self,
-            name: str = "Histogram-Based Gradient Boosting Regression",
-            **kwargs
+        self,
+        name: str = "Histogram-Based Gradient Boosting Regression",
+        random_search: bool = False,
+        parameters: dict[
+            str,
+            Union[
+                scipy.stats.rv_continuous,
+                List[Union[int, str, float]]
+            ]
+        ] = {
+        },
+        **kwargs
             ):
         """
-        Fit x on y using histogram-based gradient boosting regression
+        Fit x on y via histogram-based gradient boosting regression
 
         Parameters
         ----------
         name : str, default="Histogram-Based Gradient Boosting Regression"
             Name of classification technique.
-        -Based
-            Gradient Boosting Regression
+        random_search : bool, default=False
+            Whether to perform RandomizedSearch to optimise parameters
+        parameters : dict[\
+                str,\
+                Union[\
+                    scipy.stats.rv_continuous,\
+                    List[Union[int, str, float]]\
+                ]\
+            ], default=Preset distributions
+            The parameters used in RandomizedSearchCV
         """
-        self._sklearn_regression_meta(
+        if random_search:
+            classifier = RandomizedSearchCV(
                 en.HistGradientBoostingRegressor(**kwargs),
-                name
-                )
+                parameters,
+                cv=self.folds
+            )
+        else:
+            classifier = en.HistGradientBoostingRegressor(**kwargs)
+        self._sklearn_regression_meta(
+            classifier,
+            f'{name}{" (Random Search)" if random_search else ""}',
+            random_search=random_search
+        )
 
     def mlp_regressor(
-            self,
-            name: str = "Multi-Layer Perceptron Regression",
-            **kwargs
+        self,
+        name: str = "Multi-Layer Perceptron Regression",
+        random_search: bool = False,
+        parameters: dict[
+            str,
+            Union[
+                scipy.stats.rv_continuous,
+                List[Union[int, str, float]]
+            ]
+        ] = {
+        },
+        **kwargs
             ):
         """
-        Fit x on y using multi-layer perceptrons
+        Fit x on y via multi-layer perceptron regression
 
         Parameters
         ----------
         name : str, default="Multi-Layer Perceptron Regression"
             Name of classification technique.
-        -Layer Perceptron
-            Regression
+        random_search : bool, default=False
+            Whether to perform RandomizedSearch to optimise parameters
+        parameters : dict[\
+                str,\
+                Union[\
+                    scipy.stats.rv_continuous,\
+                    List[Union[int, str, float]]\
+                ]\
+            ], default=Preset distributions
+            The parameters used in RandomizedSearchCV
         """
-        self._sklearn_regression_meta(
+        if random_search:
+            classifier = RandomizedSearchCV(
                 nn.MLPRegressor(**kwargs),
-                name
-                )
+                parameters,
+                cv=self.folds
+            )
+        else:
+            classifier = nn.MLPRegressor(**kwargs)
+        self._sklearn_regression_meta(
+            classifier,
+            f'{name}{" (Random Search)" if random_search else ""}',
+            random_search=random_search
+        )
 
-    def svr(self, name: str = "Support Vector Regression", **kwargs):
+    def svr(
+        self,
+        name: str = "Support Vector Regression",
+        random_search: bool = False,
+        parameters: dict[
+            str,
+            Union[
+                scipy.stats.rv_continuous,
+                List[Union[int, str, float]]
+            ]
+        ] = {
+        },
+        **kwargs
+            ):
         """
-        Fit x on y using support vector regression
+        Fit x on y via support vector regression
 
         Parameters
         ----------
         name : str, default="Support Vector Regression"
             Name of classification technique.
+        random_search : bool, default=False
+            Whether to perform RandomizedSearch to optimise parameters
+        parameters : dict[\
+                str,\
+                Union[\
+                    scipy.stats.rv_continuous,\
+                    List[Union[int, str, float]]\
+                ]\
+            ], default=Preset distributions
+            The parameters used in RandomizedSearchCV
         """
-        self._sklearn_regression_meta(
+        if random_search:
+            classifier = RandomizedSearchCV(
                 svm.SVR(**kwargs),
-                name
-                )
+                parameters,
+                cv=self.folds
+            )
+        else:
+            classifier = svm.SVR(**kwargs)
+        self._sklearn_regression_meta(
+            classifier,
+            f'{name}{" (Random Search)" if random_search else ""}',
+            random_search=random_search
+        )
 
     def linear_svr(
-            self,
-            name: str = "Linear Support Vector Regression",
-            **kwargs
+        self,
+        name: str = "Linear Support Vector Regression",
+        random_search: bool = False,
+        parameters: dict[
+            str,
+            Union[
+                scipy.stats.rv_continuous,
+                List[Union[int, str, float]]
+            ]
+        ] = {
+        },
+        **kwargs
             ):
         """
-        Fit x on y using linear support vector regression
+        Fit x on y via linear support vector regression
 
         Parameters
         ----------
         name : str, default="Linear Support Vector Regression"
             Name of classification technique.
+        random_search : bool, default=False
+            Whether to perform RandomizedSearch to optimise parameters
+        parameters : dict[\
+                str,\
+                Union[\
+                    scipy.stats.rv_continuous,\
+                    List[Union[int, str, float]]\
+                ]\
+            ], default=Preset distributions
+            The parameters used in RandomizedSearchCV
         """
-        self._sklearn_regression_meta(
+        if random_search:
+            classifier = RandomizedSearchCV(
                 svm.LinearSVR(**kwargs),
-                name
-                )
+                parameters,
+                cv=self.folds
+            )
+        else:
+            classifier = svm.LinearSVR(**kwargs)
+        self._sklearn_regression_meta(
+            classifier,
+            f'{name}{" (Random Search)" if random_search else ""}',
+            random_search=random_search
+        )
 
-    def nu_svr(self, name: str = "Nu-Support Vector Regression", **kwargs):
+    def nu_svr(
+        self,
+        name: str = "Nu-Support Vector Regression",
+        random_search: bool = False,
+        parameters: dict[
+            str,
+            Union[
+                scipy.stats.rv_continuous,
+                List[Union[int, str, float]]
+            ]
+        ] = {
+        },
+        **kwargs
+            ):
         """
-        Fit x on y using nu-support vector regression
+        Fit x on y via nu-support vector regression
 
         Parameters
         ----------
         name : str, default="Nu-Support Vector Regression"
             Name of classification technique.
-        -Support Vector
-            Regression
+        random_search : bool, default=False
+            Whether to perform RandomizedSearch to optimise parameters
+        parameters : dict[\
+                str,\
+                Union[\
+                    scipy.stats.rv_continuous,\
+                    List[Union[int, str, float]]\
+                ]\
+            ], default=Preset distributions
+            The parameters used in RandomizedSearchCV
         """
+        if random_search:
+            classifier = RandomizedSearchCV(
+                svm.NuSVR(**kwargs),
+                parameters,
+                cv=self.folds
+            )
+        else:
+            classifier = svm.NuSVR(**kwargs)
         self._sklearn_regression_meta(
-                svm.LinearSVR(**kwargs),
-                name
-                )
+            classifier,
+            f'{name}{" (Random Search)" if random_search else ""}',
+            random_search=random_search
+        )
 
     def gaussian_process(
-            self,
-            name: str = "Gaussian Process Regression",
-            **kwargs
+        self,
+        name: str = "Gaussian Process Regression",
+        random_search: bool = False,
+        parameters: dict[
+            str,
+            Union[
+                scipy.stats.rv_continuous,
+                List[Union[int, str, float]]
+            ]
+        ] = {
+        },
+        **kwargs
             ):
         """
-        Fit x on y using gaussian process regression
+        Fit x on y via gaussian process regression
 
         Parameters
         ----------
         name : str, default="Gaussian Process Regression"
             Name of classification technique.
+        random_search : bool, default=False
+            Whether to perform RandomizedSearch to optimise parameters
+        parameters : dict[\
+                str,\
+                Union[\
+                    scipy.stats.rv_continuous,\
+                    List[Union[int, str, float]]\
+                ]\
+            ], default=Preset distributions
+            The parameters used in RandomizedSearchCV
         """
-        self._sklearn_regression_meta(
+        if random_search:
+            classifier = RandomizedSearchCV(
                 gp.GaussianProcessRegressor(**kwargs),
-                name
-                )
+                parameters,
+                cv=self.folds
+            )
+        else:
+            classifier = gp.GaussianProcessRegressor(**kwargs)
+        self._sklearn_regression_meta(
+            classifier,
+            f'{name}{" (Random Search)" if random_search else ""}',
+            random_search=random_search
+        )
 
-    def pls(self, name: str = "PLS Regression", **kwargs):
+    def pls(
+        self,
+        name: str = "PLS Regression",
+        random_search: bool = False,
+        parameters: dict[
+            str,
+            Union[
+                scipy.stats.rv_continuous,
+                List[Union[int, str, float]]
+            ]
+        ] = {
+        },
+        **kwargs
+            ):
         """
-        Fit x on y using pls regression
+        Fit x on y via pls regression
 
         Parameters
         ----------
-        name : str, default="PLS Regression"
+        name : str, default="Gaussian Process Regression"
             Name of classification technique.
+        random_search : bool, default=False
+            Whether to perform RandomizedSearch to optimise parameters
+        parameters : dict[\
+                str,\
+                Union[\
+                    scipy.stats.rv_continuous,\
+                    List[Union[int, str, float]]\
+                ]\
+            ], default=Preset distributions
+            The parameters used in RandomizedSearchCV
         """
+        if random_search:
+            classifier = RandomizedSearchCV(
+                cd.PLSRegression(**kwargs),
+                parameters,
+                cv=self.folds
+            )
+        else:
+            classifier = cd.PLSRegression(**kwargs)
         self._sklearn_regression_meta(
-                cd.PLSRegression(n_components=1, **kwargs),
-                name
-                )
+            classifier,
+            f'{name}{" (Random Search)" if random_search else ""}',
+            random_search=random_search
+        )
 
-    def isotonic(self, name: str = "Isotonic Regression", **kwargs):
+    def isotonic(
+        self,
+        name: str = "Isotonic Regression",
+        random_search: bool = False,
+        parameters: dict[
+            str,
+            Union[
+                scipy.stats.rv_continuous,
+                List[Union[int, str, float]]
+            ]
+        ] = {
+        },
+        **kwargs
+            ):
         """
-        Fit x on y using isotonic regression
+        Fit x on y via isotonic regression
 
         Parameters
         ----------
         name : str, default="Isotonic Regression"
             Name of classification technique.
+        random_search : bool, default=False
+            Whether to perform RandomizedSearch to optimise parameters
+        parameters : dict[\
+                str,\
+                Union[\
+                    scipy.stats.rv_continuous,\
+                    List[Union[int, str, float]]\
+                ]\
+            ], default=Preset distributions
+            The parameters used in RandomizedSearchCV
         """
-        self._sklearn_regression_meta(
+        if random_search:
+            classifier = RandomizedSearchCV(
                 iso.IsotonicRegression(**kwargs),
-                name,
-                max_coeffs=1
-                )
+                parameters,
+                cv=self.folds
+            )
+        else:
+            classifier = iso.IsotonicRegression(**kwargs)
+        self._sklearn_regression_meta(
+            classifier,
+            f'{name}{" (Random Search)" if random_search else ""}',
+            random_search=random_search
+        )
 
-    def xgboost(self, name: str = "XGBoost Regression", **kwargs):
+    def xgboost(
+        self,
+        name: str = "XGBoost Regression",
+        random_search: bool = False,
+        parameters: dict[
+            str,
+            Union[
+                scipy.stats.rv_continuous,
+                List[Union[int, str, float]]
+            ]
+        ] = {
+        },
+        **kwargs
+            ):
         """
-        Fit x on y using xgboost regression
+        Fit x on y via xgboost regression
 
         Parameters
         ----------
         name : str, default="XGBoost Regression"
             Name of classification technique.
+        random_search : bool, default=False
+            Whether to perform RandomizedSearch to optimise parameters
+        parameters : dict[\
+                str,\
+                Union[\
+                    scipy.stats.rv_continuous,\
+                    List[Union[int, str, float]]\
+                ]\
+            ], default=Preset distributions
+            The parameters used in RandomizedSearchCV
         """
-        self._sklearn_regression_meta(
+        if random_search:
+            classifier = RandomizedSearchCV(
                 xgb.XGBRegressor(**kwargs),
-                name
-                )
+                parameters,
+                cv=self.folds
+            )
+        else:
+            classifier = xgb.XGBRegressor(**kwargs)
+        self._sklearn_regression_meta(
+            classifier,
+            f'{name}{" (Random Search)" if random_search else ""}',
+            random_search=random_search
+        )
 
     def xgboost_rf(
-            self,
-            name: str = "XGBoost Random Forest Regression",
-            **kwargs
+        self,
+        name: str = "XGBoost Random Forest Regression",
+        random_search: bool = False,
+        parameters: dict[
+            str,
+            Union[
+                scipy.stats.rv_continuous,
+                List[Union[int, str, float]]
+            ]
+        ] = {
+        },
+        **kwargs
             ):
         """
-        Fit x on y using xgboosted random forest regression
+        Fit x on y via xgboosted random forest regression
 
         Parameters
         ----------
         name : str, default="XGBoost Random Forest Regression"
             Name of classification technique.
+        random_search : bool, default=False
+            Whether to perform RandomizedSearch to optimise parameters
+        parameters : dict[\
+                str,\
+                Union[\
+                    scipy.stats.rv_continuous,\
+                    List[Union[int, str, float]]\
+                ]\
+            ], default=Preset distributions
+            The parameters used in RandomizedSearchCV
         """
-        self._sklearn_regression_meta(
+        if random_search:
+            classifier = RandomizedSearchCV(
                 xgb.XGBRFRegressor(**kwargs),
-                name
-                )
+                parameters,
+                cv=self.folds
+            )
+        else:
+            classifier = xgb.XGBRFRegressor(**kwargs)
+        self._sklearn_regression_meta(
+            classifier,
+            f'{name}{" (Random Search)" if random_search else ""}',
+            random_search=random_search
+        )
 
     def return_measurements(self) -> dict[str, pd.DataFrame]:
         """
