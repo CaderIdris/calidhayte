@@ -7,7 +7,7 @@ import matplotlib.figure
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-# import shap
+import shap
 from sklearn.pipeline import Pipeline
 
 
@@ -222,6 +222,24 @@ class Graphs:
                 plt.style.context(self.style):
             self.plot_meta(lin_reg_plot, 'Linear Regression', title=title)
 
+    def shap(self, pipeline_keys: list[str], title=None):
+        x = self.x
+        y = self.y
+        pipeline = self.models[pipeline_keys[0]][pipeline_keys[1]][pipeline_keys[2]]
+        
+        if not self.plots.get(pipeline_keys[0]):
+            self.plots[pipeline_keys[0]] = dict()
+        if not self.plots[pipeline_keys[0]].get(pipeline_keys[1]):
+            self.plots[pipeline_keys[0]][pipeline_keys[1]] = dict()
+        if not self.plots[pipeline_keys[0]][pipeline_keys[1]].get(pipeline_keys[2]):
+            self.plots[pipeline_keys[0]][pipeline_keys[1]][pipeline_keys[2]] = dict()
+        with plt.rc_context({'backend': self.backend}), \
+                plt.style.context(self.style):
+            shap_df = get_shap(x, y, pipeline)
+            self.plots[pipeline_keys[0]][pipeline_keys[1]][pipeline_keys[2]]['Shap'] = shap_plot(shap_df, x)
+
+
+
     def save_plots(
         self,
         path: str,
@@ -389,3 +407,99 @@ def ecdf_plot(
     if isinstance(title, str):
         fig.suptitle(title)
     return fig
+
+def shap_plot(shaps: pd.DataFrame, x: pd.DataFrame):
+    """
+    """
+    shaps_min = shaps.drop(['Fold'], axis=1).min(axis=None)
+    shaps_max = shaps.drop(['Fold'], axis=1).max(axis=None)
+    shaps_range = shaps_max - shaps_min
+    shaps_lims = (
+        shaps_min - (shaps_range * 0.1),
+        shaps_max + (shaps_range * 0.1)
+    )
+
+    num_of_cols = shaps.drop(['Fold'], axis=1).shape[1]
+
+    shape_of_scatters = (
+        int(np.ceil(num_of_cols / 2)),
+        (min(2, int(num_of_cols)))
+    )
+
+    fig, ax = plt.subplots(
+        *shape_of_scatters,
+        figsize=(
+           4 * shape_of_scatters[0],
+           4 * shape_of_scatters[1]
+        ),
+        dpi=200
+    )
+
+    for col_ind, col in enumerate(shaps.drop(['Fold'], axis=1).columns):
+        scatter_data = pd.concat(
+            [
+                x.loc[:, col].rename('Value'),
+                shaps.loc[:, col].rename('Shap'),
+                shaps.loc[:, 'Fold'].rename('Fold')
+            ],
+            axis=1
+        )
+        x_min = scatter_data.loc[:, 'Value'].min()
+        x_max = scatter_data.loc[:, 'Value'].max()
+        x_range = x_max - x_min
+        x_lims = (x_min - (x_range * 0.1), x_max + (x_range * 0.1))
+
+        row_num = int(np.floor(col_ind / 2))
+        col_num = col_ind % 2
+        for i, fold in enumerate(sorted(shaps.loc[:, 'Fold'].unique())):
+            scat_fold = scatter_data[scatter_data.loc[:, 'Fold'] == fold]
+            ax[row_num, col_num].scatter(
+                scat_fold['Value'],
+                scat_fold['Shap'],
+                c=f'C{i}',
+                label=f'Fold {fold}',
+                marker='.'
+            )
+        ax[row_num, col_num].set_title(col)
+        ax[row_num, col_num].set_xlabel('Value')
+        ax[row_num, col_num].set_xlim(x_lims)
+        ax[row_num, col_num].set_ylabel('Shap')
+        ax[row_num, col_num].set_ylim(shaps_lims)
+
+    ax[0, 0].legend(loc='best')
+    plt.tight_layout()
+    return fig
+
+def get_shap(
+    x: pd.DataFrame,
+    y: pd.DataFrame,
+    pipeline: dict[int, Pipeline]
+    ):
+    shaps = pd.DataFrame()
+    for fold in pipeline.keys():
+        if len(pipeline.keys()) > 1:
+            fold_index = y[y.loc[:, 'Fold'] == fold].index
+            x_data = x.loc[fold_index, :]
+        else:
+            x_data = x
+        explainer = shap.KernelExplainer(
+            model=pipeline[fold][-1].predict,
+            data=x_data,
+            link='identity'
+        )
+        shaps = pd.concat(
+            [
+                shaps,
+                pd.DataFrame(
+                    explainer.shap_values(x_data),
+                    index=x_data.index,
+                    columns=x_data.columns
+                )
+            ]
+        )
+        if len(pipeline.keys()) > 1:
+            shaps.loc[x_data.index, 'Fold'] = y.loc[x_data.index, 'Fold']
+        else:
+            shaps.loc[:, 'Fold'] = 'Cross-Validated'
+        shaps = shaps.sort_index()
+    return shaps

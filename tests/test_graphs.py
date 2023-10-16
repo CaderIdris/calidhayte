@@ -85,3 +85,29 @@ def test_bland_altman(
 
     results.bland_altman_plot()
     results.save_plots('.tmp/tests')
+
+@pytest.mark.plots
+def test_shap(
+        trained_models
+        ):
+    """
+    Tests whether all datasets are selected properly
+    """
+
+    results = Graphs(**trained_models)
+
+    results.shap(
+        [
+            'Linear Regression',
+            'Yeo-Johnson Transform',
+            'x + a + b + c'
+        ]
+    )
+    results.shap(
+        [
+            'Random Forest',
+            'Yeo-Johnson Transform',
+            'x + a + b + c'
+        ]
+    )
+    results.save_plots('.tmp/tests')

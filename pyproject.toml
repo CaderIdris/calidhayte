@@ -28,6 +28,13 @@ testpaths = [
 	"tests"
 ]
 
+markers = [
+	"plots",
+	"cal",
+	"results",
+	"summary"
+]
+
 addopts = [
 	"--cov=calidhayte",
 	"--cov-report=html:reports/",
