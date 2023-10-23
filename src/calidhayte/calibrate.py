@@ -645,6 +645,17 @@ class Calibrate:
                 List[Union[int, str, float]]
             ]
         ] = {
+            'alpha': uniform(loc=0, scale=2),
+            'tol': uniform(loc=0, scale=1),
+            'solver': [
+                'svd',
+                'cholesky',
+                'lsqr',
+                'sparse_cg',
+                'sag',
+                'saga',
+                'lbfgs'
+            ]
         },
         **kwargs
             ):
@@ -716,6 +727,9 @@ class Calibrate:
                 List[Union[int, str, float]]
             ]
         ] = {
+            'alpha': uniform(loc=0, scale=2),
+            'tol': uniform(loc=0, scale=1),
+            'selection': ['cyclic', 'random']
         },
         **kwargs
             ):
@@ -787,6 +801,9 @@ class Calibrate:
                 List[Union[int, str, float]]
             ]
         ] = {
+            'alpha': uniform(loc=0, scale=2),
+            'tol': uniform(loc=0, scale=1),
+            'selection': ['cyclic', 'random']
         },
         **kwargs
             ):
@@ -858,6 +875,10 @@ class Calibrate:
                 List[Union[int, str, float]]
             ]
         ] = {
+            'alpha': uniform(loc=0, scale=2),
+            'l1_ratio': uniform(loc=0, scale=1),
+            'tol': uniform(loc=0, scale=1),
+            'selection': ['cyclic', 'random']
         },
         **kwargs
             ):
@@ -928,6 +949,10 @@ class Calibrate:
                 List[Union[int, str, float]]
             ]
         ] = {
+            'alpha': uniform(loc=0, scale=2),
+            'l1_ratio': uniform(loc=0, scale=1),
+            'tol': uniform(loc=0, scale=1),
+            'selection': ['cyclic', 'random']
         },
         **kwargs
             ):
@@ -1000,6 +1025,7 @@ class Calibrate:
                 List[Union[int, str, float]]
             ]
         ] = {
+            'n_nonzero_coefs': list(range(1, 11))
         },
         **kwargs
             ):
@@ -1046,6 +1072,7 @@ class Calibrate:
                 List[Union[int, str, float]]
             ]
         ] = {
+            'alpha': uniform(loc=0, scale=2)
         },
         **kwargs
             ):
@@ -1092,6 +1119,7 @@ class Calibrate:
                 List[Union[int, str, float]]
             ]
         ] = {
+            'n_nonzero_coefs': list(range(1, 11))
         },
         **kwargs
             ):
@@ -1139,6 +1167,11 @@ class Calibrate:
                 List[Union[int, str, float]]
             ]
         ] = {
+            'tol': uniform(loc=0, scale=1),
+            'alpha_1': uniform(loc=0, scale=1),
+            'alpha_2': uniform(loc=0, scale=1),
+            'lambda_1': uniform(loc=0, scale=1),
+            'lambda_2': uniform(loc=0, scale=1)
         },
         **kwargs
             ):
@@ -1185,6 +1218,7 @@ class Calibrate:
                 List[Union[int, str, float]]
             ]
         ] = {
+            'tol': uniform(loc=0, scale=1),
             'alpha_1': uniform(loc=0, scale=1),
             'alpha_2': uniform(loc=0, scale=1),
             'lambda_1': uniform(loc=0, scale=1),
@@ -1235,6 +1269,10 @@ class Calibrate:
                 List[Union[int, str, float]]
             ]
         ] = {
+            'power': [0, 1, 1.5, 2, 2.5, 3],
+            'alpha': uniform(loc=0, scale=2),
+            'solver': ['lbfgs', 'newton-cholesky'],
+            'tol': uniform(loc=0, scale=1),
         },
         **kwargs
             ):
@@ -1281,6 +1319,31 @@ class Calibrate:
                 List[Union[int, str, float]]
             ]
         ] = {
+            'tol': uniform(loc=0, scale=1),
+            'loss': [
+                'squared_error',
+                'huber',
+                'epsilon_insensitive',
+                'squared_epsilon_insensitive'
+            ],
+            'penalty': [
+                'l2',
+                'l1',
+                'elasticnet',
+                None
+            ],
+            'alpha': uniform(loc=0, scale=0.001),
+            'l1_ratio': uniform(loc=0, scale=1),
+            'epsilon': uniform(loc=0, scale=1),
+            'learning_rate': [
+                'constant',
+                'optimal',
+                'invscaling',
+                'adaptive'
+            ],
+            'eta0': uniform(loc=0, scale=0.1),
+            'power_t': uniform(loc=0, scale=1)
+
         },
         **kwargs
             ):
@@ -1327,6 +1390,13 @@ class Calibrate:
                 List[Union[int, str, float]]
             ]
         ] = {
+            'C': uniform(loc=0, scale=2),
+            'tol': uniform(loc=0, scale=1),
+            'loss': [
+                'epsilon_insensitive',
+                'squared_epsilon_insensitive'
+            ],
+            'epsilon': uniform(loc=0, scale=1)
         },
         **kwargs
             ):
@@ -1373,6 +1443,10 @@ class Calibrate:
                 List[Union[int, str, float]]
             ]
         ] = {
+            'estimator': [
+                lm.LinearRegression()
+                # TODO: ADD
+            ]
         },
         **kwargs
             ):
@@ -1419,6 +1493,7 @@ class Calibrate:
                 List[Union[int, str, float]]
             ]
         ] = {
+            'tol': uniform(loc=0, scale=1)
         },
         **kwargs
             ):
@@ -1465,6 +1540,9 @@ class Calibrate:
                 List[Union[int, str, float]]
             ]
         ] = {
+            'epsilon': uniform(loc=1, scale=4),
+            'alpha': uniform(loc=0, scale=0.01),
+            'tol': uniform(loc=0, scale=1)
         },
         **kwargs
             ):
@@ -1511,6 +1589,15 @@ class Calibrate:
                 List[Union[int, str, float]]
             ]
         ] = {
+            'quantile': uniform(loc=0, scale=2),
+            'alpha': uniform(loc=0, scale=2),
+            'tol': uniform(loc=0, scale=1),
+            'solver': [
+                'highs-ds',
+                'highs-ipm',
+                'highs',
+                'revised simplex',
+            ]
         },
         **kwargs
             ):
@@ -1518,6 +1605,7 @@ class Calibrate:
         Fit x on y via quantile regression
 
         Parameters
+                'interior-point',
         ----------
         name : str, default="Quantile Regression"
             Name of classification technique.
