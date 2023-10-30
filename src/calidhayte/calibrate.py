@@ -30,6 +30,7 @@ from sklearn import linear_model as lm
 from sklearn import neural_network as nn
 from sklearn import svm
 from sklearn import tree
+from sklearn.gaussian_process import kernels as kern
 import sklearn.preprocessing as pre
 from sklearn.model_selection import StratifiedKFold, RandomizedSearchCV
 from sklearn.compose import ColumnTransformer
@@ -1645,6 +1646,22 @@ class Calibrate:
                 List[Union[int, str, float]]
             ]
         ] = {
+            'criterion': [
+                'squared_error',
+                'friedman_mse',
+                'absolute_error',
+                'poisson'
+            ],
+            'splitter': [
+                'best',
+                'random'
+            ],
+            'max_features': [
+                None,
+                'sqrt',
+                'log2'
+            ],
+            'ccp_alpha': uniform(loc=0, scale=2),
         },
         **kwargs
             ):
@@ -1691,6 +1708,22 @@ class Calibrate:
                 List[Union[int, str, float]]
             ]
         ] = {
+            'criterion': [
+                'squared_error',
+                'friedman_mse',
+                'absolute_error',
+                'poisson'
+            ],
+            'splitter': [
+                'best',
+                'random'
+            ],
+            'max_features': [
+                None,
+                'sqrt',
+                'log2'
+            ],
+            'ccp_alpha': uniform(loc=0, scale=2),
         },
         **kwargs
             ):
@@ -1737,6 +1770,21 @@ class Calibrate:
                 List[Union[int, str, float]]
             ]
         ] = {
+            'n_estimators': [5, 10, 25, 50, 100, 200, 250,  500],
+            'bootstrap': [True, False],
+            'max_samples': uniform(loc=0.01, scale=0.99),
+            'criterion': [
+                'squared_error',
+                'friedman_mse',
+                'absolute_error',
+                'poisson'
+            ],
+            'max_features': [
+                None,
+                'sqrt',
+                'log2'
+            ],
+            'ccp_alpha': uniform(loc=0, scale=2),
         },
         **kwargs
             ):
@@ -1783,6 +1831,21 @@ class Calibrate:
                 List[Union[int, str, float]]
             ]
         ] = {
+            'n_estimators': [5, 10, 25, 50, 100, 200, 250,  500],
+            'bootstrap': [True, False],
+            'max_samples': uniform(loc=0.01, scale=0.99),
+            'criterion': [
+                'squared_error',
+                'friedman_mse',
+                'absolute_error',
+                'poisson'
+            ],
+            'max_features': [
+                None,
+                'sqrt',
+                'log2'
+            ],
+            'ccp_alpha': uniform(loc=0, scale=2),
         },
         **kwargs
             ):
@@ -1829,6 +1892,31 @@ class Calibrate:
                 List[Union[int, str, float]]
             ]
         ] = {
+            'loss': [
+                'squared_error',
+                'absolute_error',
+                'huber',
+                'quantile'
+            ],
+            'learning_rate': uniform(loc=0, scale=2),
+            'n_estimators': [5, 10, 25, 50, 100, 200, 250,  500],
+            'subsample': uniform(loc=0.01, scale=0.99),
+            'criterion': [
+                'friedman_mse',
+                'squared_error'
+            ],
+            'max_features': [
+                None,
+                'sqrt',
+                'log2'
+            ],
+            'init': [
+                None,
+                'zero',
+                lm.LinearRegression,
+                lm.TheilSenRegressor
+            ],
+            'ccp_alpha': uniform(loc=0, scale=2)
         },
         **kwargs
             ):
@@ -1875,6 +1963,18 @@ class Calibrate:
                 List[Union[int, str, float]]
             ]
         ] = {
+            'loss': [
+                'squared_error',
+                'absolute_error',
+                'gamma',
+                'poisson',
+                'quantile'
+            ],
+            'quantile': uniform(loc=0, scale=1),
+            'learning_rate': uniform(loc=0, scale=2),
+            'max_iter': [5, 10, 25, 50, 100, 200, 250,  500],
+            'l2_regularization': uniform(loc=0, scale=2),
+            'max_bins': [1, 3, 7, 15, 31, 63, 127, 255]
         },
         **kwargs
             ):
@@ -1921,6 +2021,48 @@ class Calibrate:
                 List[Union[int, str, float]]
             ]
         ] = {
+            'hidden_layer_sizes': [
+                (100, ),
+                (100, 200),
+                (10, ),
+                (200, 400),
+                (100, 200, 300)
+            ],
+            'activation': [
+                'identity',
+                'logistic',
+                'tanh',
+                'relu'
+            ],
+            'solver': [
+                'lbfgs',
+                'sgd',
+                'adam'
+            ],
+            'alpha': uniform(loc=0, scale=0.1),
+            'batch_size': [
+                'auto',
+                20,
+                200,
+                500,
+                1000,
+                5000,
+                10000
+            ],
+            'learning_rate': [
+                'constant',
+                'invscaling',
+                'adaptive'
+            ],
+            'learning_rate_init': uniform(loc=0, scale=0.1),
+            'power_t': uniform(loc=0.1, scale=0.9),
+            'max_iter': [5, 10, 25, 50, 100, 200, 250,  500],
+            'shuffle': [True, False],
+            'momentum': uniform(loc=0.1, scale=0.9),
+            'beta_1': uniform(loc=0.1, scale=0.9),
+            'beta_2': uniform(loc=0.1, scale=0.9),
+            'epsilon': uniform(loc=1E8, scale=1E6),
+
         },
         **kwargs
             ):
@@ -1967,6 +2109,18 @@ class Calibrate:
                 List[Union[int, str, float]]
             ]
         ] = {
+            'kernel': [
+                'linear',
+                'poly',
+                'rbf',
+                'sigmoid',
+            ],
+            'degree': [2, 3, 4],
+            'gamma': ['scale', 'auto'],
+            'coef0': uniform(loc=0, scale=1),
+            'C': uniform(loc=0.1, scale=1.9),
+            'epsilon': uniform(loc=1E8, scale=1),
+            'shrinking': [True, False]
         },
         **kwargs
             ):
@@ -2013,6 +2167,9 @@ class Calibrate:
                 List[Union[int, str, float]]
             ]
         ] = {
+            'C': uniform(loc=0.1, scale=1.9),
+            'epsilon': uniform(loc=1E8, scale=1),
+            'loss': ['epsilon_insensitive', 'squared_epsilon_insensitive']
         },
         **kwargs
             ):
@@ -2059,6 +2216,17 @@ class Calibrate:
                 List[Union[int, str, float]]
             ]
         ] = {
+            'kernel': [
+                'linear',
+                'poly',
+                'rbf',
+                'sigmoid',
+            ],
+            'degree': [2, 3, 4],
+            'gamma': ['scale', 'auto'],
+            'coef0': uniform(loc=0, scale=1),
+            'shrinking': [True, False],
+            'nu': uniform(loc=0, scale=1),
         },
         **kwargs
             ):
@@ -2105,6 +2273,17 @@ class Calibrate:
                 List[Union[int, str, float]]
             ]
         ] = {
+            'kernel': [
+                None,
+                kern.RBF,
+                kern.Matern,
+                kern.DotProduct,
+                kern.WhiteKernel,
+                kern.CompoundKernel,
+                kern.ExpSineSquared
+            ],
+            'alpha': uniform(loc=0, scale=1E8),
+            'normalize_y': [True, False]
         },
         **kwargs
             ):
@@ -2140,52 +2319,6 @@ class Calibrate:
             random_search=random_search
         )
 
-    def pls(
-        self,
-        name: str = "PLS Regression",
-        random_search: bool = False,
-        parameters: dict[
-            str,
-            Union[
-                scipy.stats.rv_continuous,
-                List[Union[int, str, float]]
-            ]
-        ] = {
-        },
-        **kwargs
-            ):
-        """
-        Fit x on y via pls regression
-
-        Parameters
-        ----------
-        name : str, default="Gaussian Process Regression"
-            Name of classification technique.
-        random_search : bool, default=False
-            Whether to perform RandomizedSearch to optimise parameters
-        parameters : dict[\
-                str,\
-                Union[\
-                    scipy.stats.rv_continuous,\
-                    List[Union[int, str, float]]\
-                ]\
-            ], default=Preset distributions
-            The parameters used in RandomizedSearchCV
-        """
-        if random_search:
-            classifier = RandomizedSearchCV(
-                cd.PLSRegression(**kwargs),
-                parameters,
-                cv=self.folds
-            )
-        else:
-            classifier = cd.PLSRegression(**kwargs)
-        self._sklearn_regression_meta(
-            classifier,
-            f'{name}{" (Random Search)" if random_search else ""}',
-            random_search=random_search
-        )
-
     def isotonic(
         self,
         name: str = "Isotonic Regression",
@@ -2197,6 +2330,7 @@ class Calibrate:
                 List[Union[int, str, float]]
             ]
         ] = {
+            'increasing': [True, False]
         },
         **kwargs
             ):
@@ -2244,6 +2378,18 @@ class Calibrate:
                 List[Union[int, str, float]]
             ]
         ] = {
+            'n_estimators': [5, 10, 25, 50, 100, 200, 250,  500],
+            'max_bins': [1, 3, 7, 15, 31, 63, 127, 255],
+            'grow_policy': [
+                'depthwise',
+                'lossguide'
+            ],
+            'learning_rate': uniform(loc=0, scale=2),
+            'tree_method': ['exact', 'approx', 'hist'],
+            'gamma': uniform(loc=0, scale=1),
+            'subsample': uniform(loc=0, scale=1),
+            'reg_alpha': uniform(loc=0, scale=1),
+            'reg_lambda': uniform(loc=0, scale=1)
         },
         **kwargs
             ):
@@ -2290,6 +2436,18 @@ class Calibrate:
                 List[Union[int, str, float]]
             ]
         ] = {
+            'n_estimators': [5, 10, 25, 50, 100, 200, 250,  500],
+            'max_bin': [1, 3, 7, 15, 31, 63, 127, 255],
+            'grow_policy': [
+                'depthwise',
+                'lossguide'
+            ],
+            'learning_rate': uniform(loc=0, scale=2),
+            'tree_method': ['exact', 'approx', 'hist'],
+            'gamma': uniform(loc=0, scale=1),
+            'subsample': uniform(loc=0, scale=1),
+            'reg_alpha': uniform(loc=0, scale=1),
+            'reg_lambda': uniform(loc=0, scale=1)
         },
         **kwargs
             ):
