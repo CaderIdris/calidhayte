@@ -1,13 +1,15 @@
-from .calibrate import Calibrate
-from .coefficients import Coefficients
-from .results import Results
-from .graphs import Graphs
-from .summary import Summary
+"""
+.. include:: ../../README.md
+"""
+
+from . import calibrate
+from . import results
+from . import graphs
+from . import summary
 
 __all__ = [
-        "Calibrate",
-        "Coefficients",
-        "Results",
-        "Graphs",
-        "Summary"
+    "calibrate",
+    "results",
+    "graphs",
+    "summary"
         ]

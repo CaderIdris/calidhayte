@@ -1,9 +1,12 @@
-.env/
+.venv/
 **/.ipynb_checkpoints/
 **/__pycache__/
 **/*.egg-info/
 **/.~lock.*
 .mypy_cache/
 .tox/
+build/*
+.tmp/*
+reports/
 .coverage
-report.html
+Pipfile.lock

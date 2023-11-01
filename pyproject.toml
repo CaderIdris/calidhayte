@@ -1,11 +1,45 @@
+[project]
+name = "calidhayte"
+version = "2.0.0dev"
+requires-python = ">=3.9"
+description = "Calibrate raw measurements against reference measurements using one or more variables"
+authors = [
+	{name="Idris Hayward", email="CaderIdrisGH@outlook.com"}
+]
+license = { file = "LICENSE" }
+classifiers = [
+	"Programming Language :: Python :: 3",
+	"Programming Language :: Python :: 3 :: Only",
+	"Operating System :: OS Independent"
+]
+readme = "README.md"
+keywords = ["calibration", "errors", "slope", "offset", "deviation"]
+dependencies = []
+
 [build-system]
 requires = ["setuptools>=42.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
+[tool.flake8]
+exclude = "docs"
+
 [tool.pytest.ini_options]
-addopts = "--cov=calidhayte tests/ --cov-report html --html=report.html --self-contained-html"
 testpaths = [
-	"tests",
+	"tests"
+]
+
+markers = [
+	"plots",
+	"cal",
+	"results",
+	"summary"
+]
+
+addopts = [
+	"--cov=calidhayte",
+	"--cov-report=html:reports/",
+	"--html=reports/tests/index.html",
+	"--self-contained-html"
 ]
 markers = [
 	"graph",
@@ -28,3 +62,38 @@ warn_return_any = true
 warn_unreachable = true
 warn_unused_configs = true
 no_implicit_reexport = true
+
+[tool.tox]
+legacy_tox_ini = """
+	[tox]
+	minversion = 4.0
+	envlist = py39, py311, flake8, mypy
+	isolated_build = true
+
+	[gh-actions]
+	python =
+		3.9: py39
+		3.11: py311, mypy, flake8
+
+	[testenv]
+	setenv =
+		PYTHONPATH = {toxinidir}
+	deps =
+		-r{toxinidir}/requirements.txt
+	commands =
+		pytest --basetemp={envtmpdir}
+
+	[testenv:flake8]
+	basepython = python3.11
+	deps = -r requirements.txt
+	commands = flake8 src tests
+
+	[testenv:mypy]
+	basepython = python3.11
+	deps = -r requirements.txt
+	commands = mypy src
+"""
+
+[tool.pyright]
+venvPath = ""
+venv = ".venv"

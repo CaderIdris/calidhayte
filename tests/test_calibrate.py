@@ -1,196 +1,163 @@
-from io import StringIO
-
+import numpy as np
 import pandas as pd
 import pytest
+from typing import Callable, List
 
-from calidhayte import Calibrate
+from sklearn.pipeline import Pipeline
 
-
-@pytest.fixture
-def all_values_present_skl():
-    """
-    Coeffs and measurements with no expected errors
-    """
-    coeffs = """Coefficients,coeff.x,coeff.a,coeff.b,i.intercept
-x,2,,,1
-a,,2,,1
-x + a,1,1,,1
-b,,,4,1
-x + b,0.5,,3,1
-x + a + b,0.25,0.25,3,1"""
-    test = """index,y,x,a,b
-0,3,1,1,0.5
-1,5,2,2,1
-3,17,8,8,4"""
-    train = """index,y,x,a,b
-2,9,4,4,2
-4,1,0,0,0
-    """
-    return {
-            'train': pd.read_csv(StringIO(train)).set_index("index"),
-            'test': pd.read_csv(StringIO(test)).set_index("index"),
-            'coefficients': pd.read_csv(StringIO(coeffs)).set_index(
-                "Coefficients"
-                )
-            }
+from calidhayte.calibrate import Calibrate
 
 
 @pytest.fixture
-def all_values_present_pymc():
+def full_data():
     """
-    Coeffs and measures with no expected errors
+    Dataset composed of random values. y df constructed from x_df scaled by
+    4 random coeffs
     """
+    np.random.seed(72)
+    x_df = pd.DataFrame()
+    x_df['x'] = pd.Series(np.random.rand(300))
+    x_df['a'] = pd.Series(np.random.rand(300))
+    coeffs = np.random.randn(2)
 
-    coeffs = """Coefficients,coeff.x,sd.x,coeff.a,sd.a,i.intercept,sd.intercept
-x,2,1,,,3,1
-a,,,2,1,3,1
-x + a,1,1,1,1,3,1"""
+    y_df = pd.DataFrame()
+    modded = x_df * coeffs
 
-    test = """index,y,x,a
-0,5,1,1
-1,7,2,2
-3,4,0.5,0.5"""
+    y_df['x'] = modded.sum(axis=1)
 
-    train = """index,y,x,a
-2,11,4,4
-4,3,0,0"""
+    z_df = pd.DataFrame()
+    z_df['x'] = pd.Series(np.random.rand(300))
+    z_df['a'] = pd.Series(np.random.rand(300))
 
     return {
-            'train': pd.read_csv(StringIO(train)).set_index("index"),
-            'test': pd.read_csv(StringIO(test)).set_index("index"),
-            'coefficients': pd.read_csv(StringIO(coeffs)).set_index(
-                "Coefficients"
-                )
+            'x': x_df,
+            'y': y_df,
+            'z': z_df
             }
 
 
+@pytest.mark.parametrize("folds", [2, 3, 4, 5])
 @pytest.mark.cal
-def test_skl_standard_cal(all_values_present_skl):
+def test_data_split(full_data, folds):
     """
-    Tests that signals with associated scikitlearn coefficients are calibrated
-    properly
+    Tests whether data is split properly
     """
     tests = dict()
-    cal = Calibrate(**all_values_present_skl)
-
-    expected_test = all_values_present_skl['test'].loc[:, "y"]
-    expected_train = all_values_present_skl['train'].loc[:, "y"]
-
-    measures = cal.return_measurements()
-    print(measures['Train'])
-    for col in measures["Train"].columns:
-        tests[f"{col} train"] = expected_train.equals(measures["Train"]
-                                                      .loc[:, col]
-                                                      .astype(int)
-                                                      )
-    for col in measures["Test"].columns:
-        tests[f"{col} test"] = expected_test.equals(measures["Test"]
-                                                    .loc[:, col]
-                                                    .astype(int)
-                                                    )
-    for key, test in tests.items():
-        print(f"{key}: {test}")
-    assert all(tests.values())
-
-
-@pytest.mark.cal
-def test_pymc_standard_cal(all_values_present_pymc):
-    """
-    Tests that signals with associated pymc coefficients are calibrated
-    properly
-    """
-    tests = dict()
-    cal = Calibrate(**all_values_present_pymc)
-
-    expected_test = all_values_present_pymc['test'].loc[:, "y"]
-    expected_train = all_values_present_pymc['train'].loc[:, "y"]
-
-    keys = ["x", "a", "x + a"]
-    vals = cal.return_measurements()
-    for key in keys:
-        tests[f"{key} train"] = expected_train.equals(vals['Mean.Train'][key]
-                                                      .astype(int)
-                                                      )
-        tests[f"{key} min train"] = expected_train.gt(vals['Minimum.Train'][key]
-                                                      .astype(float)
-                                                      ).all()
-        tests[f"{key} max train"] = expected_train.lt(vals['Maximum.Train'][key]
-                                                      .astype(float)
-                                                      ).all()
-
-        tests[f"{key} test"] = expected_test.equals(vals['Mean.Test'][key]
-                                                    .astype(int)
-                                                    )
-        tests[f"{key} min test"] = expected_test.gt(vals['Minimum.Test'][key]
-                                                    .astype(float)
-                                                    ).all()
-        tests[f"{key} max test"] = expected_test.lt(vals['Maximum.Test'][key]
-                                                    .astype(float)
-                                                    ).all()
-    for key, test in tests.items():
-        print(f"{key}: {test}")
-    assert all(tests.values())
-
-
-@pytest.mark.cal
-def test_calibrate_blanks_provided():
-    """
-    Tests that the proper error is raised when passing in blank dataframes
-    """
-    with pytest.raises(
-            ValueError,
-            match=r"The following axis are empty: \[.*\]"
-            ):
-        Calibrate(
-                train=pd.DataFrame(),
-                test=pd.DataFrame(),
-                coefficients=pd.DataFrame()
-                )
-
-
-@pytest.mark.parametrize(
-        "data_type,ex_or,ex_pr",
-        [
-            (
-                "skl",
-                pd.Series([1, 2, 4, 8, 0]),
-                pd.Series([3, 5, 9, 17, 1])
-            ),
-            (
-                "pymc",
-                pd.Series([1, 2, 4, 0.5, 0]),
-                pd.Series([5, 7, 11, 4, 3])
+    print(full_data['x'])
+    print(full_data['y'])
+    coeff_inst = Calibrate(
+            x_data=full_data['x'],
+            y_data=full_data['y'],
+            target='x',
+            folds=folds
             )
-         ]
-    )
+    split_coeffs = coeff_inst.return_measurements()['y']
+    num_of_folds = split_coeffs.loc[:, 'Fold'].nunique()
+    print(num_of_folds)
+    test_prop = split_coeffs.loc[:, 'Fold'].value_counts()[0] /\
+        split_coeffs.shape[0]
+    print(test_prop)
+
+    tests['Correct Num of Folds'] = num_of_folds == folds
+    tests['Correct Prop of Folds'] = test_prop == pytest.approx(1/(folds), 0.1)
+    for test, result in tests.items():
+        print(f"{test}: {result}")
+
+    assert all(tests.values())
+
+
 @pytest.mark.cal
-def test_join_measurements(
-        data_type,
-        ex_or,
-        ex_pr,
-        all_values_present_skl,
-        all_values_present_pymc
-        ):
+@pytest.mark.parametrize("rsearch", [True, False])
+def test_skl_cals(full_data, rsearch):
     """
-    Tests that measurements are joined properly
+    Combines all possible multivariate key combos with each skl calibration
+    method except omp which needs at least 1 mv key
     """
-    tests = list()
-    if data_type == "skl":
-        measures = all_values_present_skl
-    else:
-        measures = all_values_present_pymc
-    cal = Calibrate(**measures)
+    tests = dict()
+    funcs: List[Callable[..., None]] = [
+            Calibrate.bayesian_ard,
+            Calibrate.bayesian_ridge,
+            Calibrate.decision_tree,
+            Calibrate.elastic_net,
+            Calibrate.elastic_net_cv,
+            Calibrate.extra_tree,
+            Calibrate.extra_trees_ensemble,
+            Calibrate.gaussian_process,
+            Calibrate.gradient_boost_regressor,
+            Calibrate.hist_gradient_boost_regressor,
+            Calibrate.huber,
+            Calibrate.isotonic,
+            Calibrate.lars,
+            Calibrate.lars_lasso,
+            Calibrate.lasso,
+            Calibrate.lasso_cv,
+            Calibrate.linear_svr,
+            Calibrate.linreg,
+            Calibrate.mlp_regressor,
+            Calibrate.nu_svr,
+            Calibrate.omp,
+            Calibrate.passive_aggressive,
+            Calibrate.random_forest,
+            Calibrate.ransac,
+            Calibrate.ridge,
+            Calibrate.ridge_cv,
+            Calibrate.stochastic_gradient_descent,
+            Calibrate.svr,
+            Calibrate.theil_sen,
+            Calibrate.tweedie,
+            Calibrate.xgboost,
+            Calibrate.xgboost_rf,
+            # Calibrate.pymc_bayesian
+            ]
+    coeff_inst = Calibrate(
+            x_data=full_data['x'],
+            y_data=full_data['y'],
+            target='x'
+            )
+    for func in funcs:
+        print(func)
+        func(coeff_inst, random_search=rsearch)
+    models = coeff_inst.return_models()
+    tests['Correct number of techniques'] = len(
+            models.keys()
+        ) == len(funcs)
+    for technique, scaling_methods in models.items():
+        tests[f'Correct number of scalers {technique}'] = len(
+                scaling_methods.keys()
+                ) == 1
+        for _, var_combos in scaling_methods.items():
+            if "Orthogonal Matching Pursuit" in technique:
+                correct_num_of_vars = 1
+            elif "Isotonic Regression" in technique:
+                print(var_combos.keys())
+                correct_num_of_vars = 1
+            else:
+                correct_num_of_vars = 2
 
-    joined_measures = cal.join_measurements()
+            tests[f'Correct number of vars {technique}'] = len(
+                    var_combos.keys()
+                    ) == correct_num_of_vars
 
-    orig_test = ex_or.eq(joined_measures["Uncalibrated"].loc[:, "x"])
-    tests.append(orig_test.all())
-    print(f"x values joined correctly: {orig_test}")
-    if data_type == "skl":
-        pred_test = ex_pr.eq(joined_measures["Calibrated"].loc[:, "x"])
-    else:
-        pred_test = ex_pr.eq(joined_measures["Mean.Calibrated"].loc[:, "x"])
-    tests.append(pred_test.all())
-    print(f"y values joined correctly: {pred_test}")
+            for vars, folds in var_combos.items():
+                if (
+                    "Cross Validated" not in technique and
+                    "(Random Search)" not in technique
+                ):
+                    tests[
+                            f'Correct number of folds {technique} {vars}'
+                            ] = len(folds.keys()) == 5
+                else:
+                    tests[
+                            f'Correct number of folds {technique} {vars}'
+                            ] = len(folds.keys()) == 1
 
-    assert all(tests)
+                for fold, pipe in folds.items():
+                    _ = pipe.predict(full_data['z'])
+                    tests[
+                            f'Pipe for {technique} {vars} {fold} works'
+                            ] = isinstance(pipe, Pipeline)
+
+    for test, result in tests.items():
+        if not result:
+            print(f"{test}: {result}")
+    assert all(tests.values())

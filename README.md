@@ -21,37 +21,34 @@
 
 ## Summary
 
-calidhayte contains a series of modules designed to calibrate one set of measurements against a reference/true value, perform a suite of error calculations on the results and plot several different types of graphs to summarise the results.
-The measurements are split into test and training set and the tests can be performed on a configurable subset of measurements:
-- Uncalibrated Test/Train/Full
-- Calibrated Test/Train/Full
-
-This module was designed with air quality measurements in mind though other measurements should work too.
+calidhayte calibrates one set of measurements against another, using a variety of parametric and non parametric techniques.
+The datasets are split by k-fold cross validation and stratified so the distribution of 'true' measurements is consistent in all.
+It can then performs multiple error calculations to validate them, as well as produce several graphs to visualise the calibrations. 
 
 ---
 
 ## Main Features
 
-- Calibrate one set of measurements (with a configurable number of secondary independent variables) against a reference or true value
-	- A suite of calibration methods are available, including bayesian methods
+- Calibrate one set of measurements (cross-comparing all available secondary variables) against a 'true' set
+	- A suite of calibration methods are available, including bayesian regression
 - Perform a suite of error calculations on the resulting calibration
+- Visualise results of calibration
+- Summarise calibrations to highlight best performing techniques
+
 ---
 
 ## How to install
 
-NOTE: Bayesian regression via pymc currently does not work for Python 3.11.
-Therefore Python 3.11 is currently not supported for Bayesian methods
-
 **pip**
 
 ```bash
-pip install git+https://github.com/CaderIdris/calidhayte@{release_tag}
+pip install git+https://github.com/CaderIdris/calidhayte@release_tag
 ```
 
 **conda**
 ```bash
 conda install git pip
-pip install git+https://github.com/CaderIdris/calidhayte@{release_tag} 
+pip install git+https://github.com/CaderIdris/calidhayte@release_tag 
 ```
 
 The release tags can be found in the sidebar
@@ -60,7 +57,7 @@ The release tags can be found in the sidebar
 
 ## Dependencies
 
-Please see [requirements.txt](./requirements.txt) and [requirements_dev.txt](./requirements_dev.txt) for the standard and development dependencies respectively.
+Please see [Pipfile](./Pipfile).
 
 ---
 
@@ -69,7 +66,8 @@ Please see [requirements.txt](./requirements.txt) and [requirements_dev.txt](./r
 This module requires two dataframes as a prerequisite. 
 
 **Independent Measurements**
-||Values|a|b|c|d|e|
+
+||x|a|b|c|d|e|
 |---|---|---|---|---|---|---|
 |2022-01-01|0.1|0|7|2.2|3|5|
 |2022-01-02|0.7|1|3|2|8.9|1|
@@ -78,7 +76,8 @@ This module requires two dataframes as a prerequisite.
 |2022-09-30|0.5|3|1|2.7|4|0|
 
 **Dependent Measurements**
-||Values|
+
+||x|
 |---|---|
 |2022-01-02|1|
 |2022-01-05|3|
@@ -94,49 +93,50 @@ This module requires two dataframes as a prerequisite.
 
 
 ```python
-from calidhayte import Coefficients, Results, Graphs, Summary
+from calidhayte import Calibrate, Results, Graphs, Summary
 
 # x_df is a dataframe containing multiple columns containing independent measurements.
 # The primary measurement is denoted by the 'Values' columns, the other measurement columns can have any name.
 # y_df is a dataframe containing the dependent measurement in the 'Values' column.
 
-coeffs = Coefficients(
-	x_data=x_df,
-	y_data=y_df,
-	split=True,
-	test_size=0.5,
-	seed=419
+coeffs = Calibrate(
+	x=x_df,
+	y=y_df
+	target='x'
 )
 
-coeffs.ols(['a', 'b'])  # OLS Calibration using secondary variables a and b
-coeffs.theil_sen()  # Theil sen calibration with primary variable only
-coeffs.bayesian(['a'], family='Student T') # Bayesian calibration using student t distribution with secondary variable a
+cal.linreg()
+cal.theil_sen()
+cal.random_forest(n_estimators=500, max_features=1.0)
 
-coefficients = coeffs.return_coefficients()
-test_train = coeffs.return_measurements()
+models = coeffs.return_models()
 
-errors = Results(
-	test=test_train['Train'],
-	train=test_train['Test'],
-	coefficients=coeffs['OLS'],
-	datasets_to_use=["Calibrated Test", "Uncalibrated Test", "Calibrated Full"],
-	x_name="x",
-	y_name="y"
-	)
-errors.max() # Max error
-errors.r2() # r2
+results = Results(
+	x=x_df,
+	y=y_df,
+	target='x',
+	models=models
+)
+
+results.r2()
+results.median_absolute()
+results.max()
+
+results_df = results.return_errors()
+results_df.to_csv('results.csv')
 
 graphs = Graphs(
-	test=test_train['Train'],
-	train=test_train['Test'],
-	coefficients=coeffs['OLS'],
-	datasets_to_use=["Calibrated Test", "Uncalibrated Test", "Calibrated Full"],
-	style="ggplot",
-	x_name="x",
-	y_name="y"
-	)
-graphs.bland_altman_plot("x vs y (OLS)")  # Bland Altman plot
-graphs.save_plots("Output", format="png")  # Save plots as png in Output
+	x=x_df,
+	y=y_df,
+	target='x',
+	models=models,
+	x_name='x',
+	y_name='y'
+)
+graphs.ecdf_plot()
+graphs.lin_reg_plot()
+graphs.save_plots()
+
 ```
 
 ---

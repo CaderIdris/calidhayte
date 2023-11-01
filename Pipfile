@@ -1,0 +1,27 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+numpy = "*"
+pandas = "*"
+scikit-learn = "*"
+bambi = "*"
+shap = "*"
+xgboost = "*"
+matplotlib = "*"
+calidhayte = {file = "."}
+
+[dev-packages]
+tox = "*"
+pytest = "*"
+flake8 = "*"
+mypy = "*"
+pdoc = "*"
+pytest-cov = "*"
+pytest-html = "*"
+jupyter = "*"
+
+[requires]
+python_version = "3.11"
