@@ -22,7 +22,6 @@ import pandas as pd
 import scipy
 from scipy.stats import uniform
 import sklearn as skl
-from sklearn import cross_decomposition as cd
 from sklearn import ensemble as en
 from sklearn import gaussian_process as gp
 from sklearn import isotonic as iso
@@ -1445,8 +1444,9 @@ class Calibrate:
             ]
         ] = {
             'estimator': [
-                lm.LinearRegression()
-                # TODO: ADD
+                lm.LinearRegression(),
+                lm.TheilSenRegressor(),
+                lm.LassoLarsCV()
             ]
         },
         **kwargs

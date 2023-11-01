@@ -225,20 +225,40 @@ class Graphs:
     def shap(self, pipeline_keys: list[str], title=None):
         x = self.x
         y = self.y
-        pipeline = self.models[pipeline_keys[0]][pipeline_keys[1]][pipeline_keys[2]]
-        
+        pipeline = self.models[
+            pipeline_keys[0]
+            ][
+                pipeline_keys[1]
+                ][
+                    pipeline_keys[2]
+                    ]
+
         if not self.plots.get(pipeline_keys[0]):
             self.plots[pipeline_keys[0]] = dict()
         if not self.plots[pipeline_keys[0]].get(pipeline_keys[1]):
             self.plots[pipeline_keys[0]][pipeline_keys[1]] = dict()
-        if not self.plots[pipeline_keys[0]][pipeline_keys[1]].get(pipeline_keys[2]):
-            self.plots[pipeline_keys[0]][pipeline_keys[1]][pipeline_keys[2]] = dict()
+        if not self.plots[
+            pipeline_keys[0]
+                ][
+                pipeline_keys[1]
+                    ].get(pipeline_keys[2]):
+
+            self.plots[
+                pipeline_keys[0]
+                    ][
+                        pipeline_keys[1]][pipeline_keys[2]] = dict()
         with plt.rc_context({'backend': self.backend}), \
                 plt.style.context(self.style):
             shap_df = get_shap(x, y, pipeline)
-            self.plots[pipeline_keys[0]][pipeline_keys[1]][pipeline_keys[2]]['Shap'] = shap_plot(shap_df, x)
-
-
+            self.plots[
+                pipeline_keys[0]
+                    ][
+                        pipeline_keys[1]
+                        ][
+                            pipeline_keys[2]
+                            ][
+                                'Shap'
+                                ] = shap_plot(shap_df, x)
 
     def save_plots(
         self,
@@ -408,6 +428,7 @@ def ecdf_plot(
         fig.suptitle(title)
     return fig
 
+
 def shap_plot(shaps: pd.DataFrame, x: pd.DataFrame):
     """
     """
@@ -470,11 +491,12 @@ def shap_plot(shaps: pd.DataFrame, x: pd.DataFrame):
     plt.tight_layout()
     return fig
 
+
 def get_shap(
-    x: pd.DataFrame,
-    y: pd.DataFrame,
-    pipeline: dict[int, Pipeline]
-    ):
+        x: pd.DataFrame,
+        y: pd.DataFrame,
+        pipeline: dict[int, Pipeline]
+        ):
     shaps = pd.DataFrame()
     for fold in pipeline.keys():
         if len(pipeline.keys()) > 1:

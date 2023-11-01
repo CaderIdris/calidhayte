@@ -86,6 +86,7 @@ def test_bland_altman(
     results.bland_altman_plot()
     results.save_plots('.tmp/tests')
 
+
 @pytest.mark.plots
 def test_shap(
         trained_models
