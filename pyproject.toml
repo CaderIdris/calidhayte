@@ -14,7 +14,15 @@ classifiers = [
 ]
 readme = "README.md"
 keywords = ["calibration", "errors", "slope", "offset", "deviation"]
-dependencies = []
+dependencies = [
+	'numpy ~= 1.25',
+	'pandas ~= 2.1',
+	'scikit-learn ~= 1.3',
+	'bambi ~= 0.13',
+	'shap ~= 0.43',
+	'xgboost ~= 2.0',
+	'matplotlib ~= 3.8'
+]
 
 [build-system]
 requires = ["setuptools>=42.0", "wheel"]
@@ -40,13 +48,6 @@ addopts = [
 	"--cov-report=html:reports/",
 	"--html=reports/tests/index.html",
 	"--self-contained-html"
-]
-markers = [
-	"graph",
-	"summary",
-	"result",
-	"coeff",
-	"cal"
 ]
 
 [tool.mypy]
