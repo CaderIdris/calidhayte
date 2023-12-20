@@ -7,11 +7,12 @@ Acts as a wrapper for scikit-learn performance metrics [^skl].
 [^skl]: https://scikit-learn.org/stable/modules/classes.html
 """
 
-try:
-    from typing import Any, TypeAlias
-except ImportError:
-    from typing_extensions import Any, TypeAlias
+import logging
+from pathlib import Path
+import pickle
+from typing import Any, TypeAlias, Union
 
+import numpy as np
 import pandas as pd
 from sklearn import metrics as met
 from sklearn.pipeline import Pipeline
@@ -20,11 +21,13 @@ CoefficientPipelineDict: TypeAlias = dict[str,  # Technique name
                                           dict[str,  # Scaling technique
                                                dict[str,  # Variable combo
                                                     dict[int,  # Fold
-                                                         Pipeline]]]]
+                                                         Union[
+                                                            Path, Pipeline]]]]]
 """
 Type alias for the nested dictionaries that the models are stored in
 """
 
+logger = logging.getLogger(f'__main__.{__name__}')
 
 class Results:
     """
@@ -39,7 +42,8 @@ class Results:
         x_data: pd.DataFrame,
         y_data: pd.DataFrame,
         target: str,
-        models: CoefficientPipelineDict
+        models: CoefficientPipelineDict,
+        errors: pd.DataFrame = pd.DataFrame()
     ):
         """
         Initialises the class
@@ -55,6 +59,9 @@ class Results:
             the name of a column in both `x_data` and `y_data`.
         models : CoefficientPipelineDict
             The calibrated models.
+        errors : pd.DataFrame
+            Any previously calculated errors. Useful if you need to skip over
+            previous calculations.
         """
         if target not in x_data.columns or target not in y_data.columns:
             not_in_x = target not in x_data.columns
@@ -107,7 +114,7 @@ class Results:
         ```
 
         """
-        self.errors: pd.DataFrame = pd.DataFrame()
+        self.errors: pd.DataFrame = errors
         """
         Results of error metric valculations. Index increases sequentially
         by 1, columns contain the technique, scaling method, variables and
@@ -120,23 +127,57 @@ class Results:
         |1|Theil-Sen|Yeo-JohnsonScaling|x + a + b|1|0.98|...|0.01|
         |...|...|...|...|...|...|...|...|
         |55|Extra Trees|None|x|2|0.43|...|0.52|
-
         """
+        self.pred_vals: dict[str, dict[ str, dict[str, pd.DataFrame]]] = dict()
+        """
+        """
+        self.cached_error_length: int = self.errors.shape[0]
 
     def _sklearn_error_meta(self, err: Any, name: str, **kwargs):
         """
         """
-        idx = 0
+        idx = self.cached_error_length
+        true = self.y.loc[
+                :, self.target
+            ][self.y.loc[:, 'Fold'] == 'Validation']
         for technique, scaling_techniques in self.models.items():
+            if self.pred_vals.get(technique) is None:
+                self.pred_vals[technique] = dict()
             for scaling_technique, var_combos in scaling_techniques.items():
+                if self.pred_vals[technique].get(scaling_technique) is None:
+                    self.pred_vals[technique][scaling_technique] = dict()
                 for vars, folds in var_combos.items():
+                    self.pred_vals[technique][scaling_technique][vars] = pd.DataFrame(index=true.index)
+                    try:
+                        if self.errors.loc[
+                            (self.errors['Technique'] == technique) &
+                            (self.errors['Scaling Method'] == scaling_technique) &
+                            (self.errors['Variables'] == vars) 
+                        ].loc[:, name].notna().any(axis=None):
+                            continue
+                    except KeyError:
+                        pass
                     for fold, pipe in folds.items():
-                        true = self.y.loc[
-                                :, self.target
-                                ][self.y.loc[:, 'Fold'] == fold]
-                        pred_raw = self.x.loc[true.index, :]
-                        pred = pipe.predict(pred_raw)
-                        error = err(true, pred, **kwargs)
+                        if fold not in self.pred_vals[technique][scaling_technique][vars].columns:
+                            pred_raw = self.x.loc[true.index, vars.split(' + ')]
+                            if isinstance(pipe, Pipeline):
+                                pipe_to_use = pipe
+                            elif isinstance(pipe, Path):
+                                with pipe.open('rb') as pkl:
+                                    pipe_to_use = pickle.load(pkl)
+                            else:
+                                continue
+                            pred_no_ind = pipe_to_use.predict(pred_raw)
+                            self.pred_vals[technique][scaling_technique][vars][fold] = pred_no_ind
+                        try: 
+                            predicted = self.pred_vals[technique][scaling_technique][vars][fold].dropna()
+                            error = err(true[predicted.index], predicted, **kwargs)
+                        except ValueError as exc:
+                            logger.warning(technique, scaling_technique, vars, fold)
+                            for arg in exc.args:
+                                logger.warning(arg)
+                            error = np.nan
+
                         if idx not in self.errors.index:
                             self.errors.loc[idx, 'Technique'] = technique
                             self.errors.loc[
@@ -146,6 +187,17 @@ class Results:
                             self.errors.loc[idx, 'Fold'] = fold
                         self.errors.loc[idx, name] = error
                         idx = idx+1
+                    if idx not in self.errors.index:
+                        self.errors.loc[idx, 'Technique'] = technique
+                        self.errors.loc[
+                                idx, 'Scaling Method'
+                                ] = scaling_technique
+                        self.errors.loc[idx, 'Variables'] = vars
+                        self.errors.loc[idx, 'Fold'] = 'All'
+                    predicted = self.pred_vals[technique][scaling_technique][vars].mean(axis=1).dropna()
+                    error = err(self.y.loc[predicted.index, self.target], predicted, **kwargs)
+                    self.errors.loc[idx, name] = error
+                    idx = idx+1
 
     def explained_variance_score(self):
         """Calculate the explained variance score between the true values (y)
@@ -350,6 +402,4 @@ sklearn.metrics.mean_tweedie_deviance\
             |Extra Trees|None|x|2|0.43|...|0.52|
 
         """
-        return self.errors.set_index(
-                    ['Technique', 'Scaling Method', 'Variables', 'Fold']
-                )
+        return self.errors

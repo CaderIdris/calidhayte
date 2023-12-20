@@ -13,8 +13,10 @@ Acts as a wrapper for scikit-learn [^skl], XGBoost [^xgb] and PyMC (via Bambi)
 from collections.abc import Iterable
 from copy import deepcopy as dc
 import logging
+from pathlib import Path
+import pickle
 import sys
-from typing import Any, List, Literal, Union
+from typing import Any, List, Literal, Optional, Union
 import warnings
 
 # import bambi as bmb
@@ -33,12 +35,10 @@ from sklearn import tree
 from sklearn.gaussian_process import kernels as kern
 import sklearn.preprocessing as pre
 from sklearn.model_selection import StratifiedKFold, RandomizedSearchCV
+from sklearn.model_selection import train_test_split
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
 import xgboost as xgb
-
-_logger = logging.getLogger("pymc")
-_logger.setLevel(logging.ERROR)
 
 
 def cont_strat_folds(
@@ -46,6 +46,7 @@ def cont_strat_folds(
         target_var: str,
         splits: int = 5,
         strat_groups: int = 5,
+        validation_size: float = 0.1,
         seed: int = 62
         ) -> pd.DataFrame:
     """
@@ -59,6 +60,8 @@ def cont_strat_folds(
         Number of folds to make.
     strat_groups : int, default=10
         Number of groups to split data in to for stratification.
+    validation_size : float, default = 0.1
+        Size of measurements to keep aside for validation
     seed : int, default=62
         Random state to use.
 
@@ -97,22 +100,35 @@ def cont_strat_folds(
 
     """
     _df = df.copy()
-    _df['Fold'] = -1
+    _df['Fold'] = 'Validation'
     skf = StratifiedKFold(
             n_splits=splits,
             random_state=seed,
             shuffle=True
             )
-    _df['Group'] = pd.cut(
+    _df['Group'] = pd.qcut(
             _df.loc[:, target_var],
             strat_groups,
             labels=False
             )
+
     group_label = _df.loc[:, 'Group']
 
+    train_set, val_set = train_test_split(
+        _df,
+        test_size=validation_size,
+        random_state=seed,
+        shuffle=True,
+        stratify=group_label
+    )
+
+    group_label = train_set.loc[:, 'Group']
+
     for fold_number, (_, v) in enumerate(skf.split(group_label, group_label)):
-        _df.loc[v, 'Fold'] = fold_number
-    return _df.drop('Group', axis=1)
+        _temp_df = train_set.iloc[v, :]
+        _temp_df.loc[:, 'Fold'] = fold_number
+        train_set.iloc[v, :] = _temp_df
+    return pd.concat([train_set, val_set]).sort_index().drop('Group', axis=1)
 
 
 class Calibrate:
@@ -227,6 +243,11 @@ class Calibrate:
                     'Quantile Transform (Gaussian)',
                     ]
                 ] = 'None',
+            random_search_iterations: int = 25,
+            validation_size: float = 0.1,
+            verbosity: int = 0,
+            n_jobs: int = -1,
+            pickle_path: Optional[Path] = None,
             seed: int = 62
                  ):
         """Initialises class
@@ -326,13 +347,31 @@ class Calibrate:
         """
         The scaling algorithm(s) to preprocess the data with
         """
+        self.y_data = cont_strat_folds(
+                y_data.loc[join_index, :],
+                target,
+                folds,
+                strat_groups,
+                validation_size,
+                seed
+                )
+        """
+        The data that `x_data` will be calibrated against. A '*Fold*'
+        column is added using the `const_strat_folds` function which splits
+        the data into k stratified folds (where k is the value of
+        `folds`). It splits the continuous measurements into n bins (where n
+        is the value of `strat_groups`) and distributes each bin equally
+        across all folds. This significantly reduces the chances of one fold
+        containing a skewed distribution relative to the whole dataset.
+        """
         if isinstance(scaler, str):
             if scaler == "All":
-                if not bool(self.x_data.ge(0).all(axis=None)):
+                if bool(self.x_data.le(0).any(axis=None)) or bool(self.y_data.drop('Fold', axis=1).le(0).any(axis=None)):
+                    self.scaler_list.pop('Box-Cox Transform')
                     warnings.warn(
+                        'WARN: '
                         'Box-Cox is not compatible with provided measurements'
                     )
-                    self.scaler_list.pop('Box-Cox Transform')
                 self.scaler.extend(self.scaler_list.keys())
             elif scaler in self.scaler_list.keys():
                 self.scaler.append(scaler)
@@ -341,8 +380,9 @@ class Calibrate:
                 warnings.warn(f'Scaling algorithm {scaler} not recognised')
         elif isinstance(scaler, (tuple, list)):
             for sc in scaler:
-                if sc == 'Box-Cox Transform' and not bool(
-                    self.x_data.ge(0).all(axis=None)
+                if sc == 'Box-Cox Transform' and not any(
+                    bool(self.x_data.lt(0).any(axis=None)),
+                    bool(self.y_data.lt(0).any(axis=None))
                 ):
                     warnings.warn(
                         'Box-Cox is not compatible with provided measurements'
@@ -362,22 +402,6 @@ class Calibrate:
             )
             self.scaler.append('None')
 
-        self.y_data = cont_strat_folds(
-                y_data.loc[join_index, :],
-                target,
-                folds,
-                strat_groups,
-                seed
-                )
-        """
-        The data that `x_data` will be calibrated against. A '*Fold*'
-        column is added using the `const_strat_folds` function which splits
-        the data into k stratified folds (where k is the value of
-        `folds`). It splits the continuous measurements into n bins (where n
-        is the value of `strat_groups`) and distributes each bin equally
-        across all folds. This significantly reduces the chances of one fold
-        containing a skewed distribution relative to the whole dataset.
-        """
         self.models: dict[str,  # Technique name
                           dict[str,  # Scaling technique
                                dict[str,  # Variable combo
@@ -423,6 +447,19 @@ class Calibrate:
         """
         The number of folds used in k-fold cross validation
         """
+        self.rs_iter: int = random_search_iterations
+        """
+        Number of iterations to use in random search
+        """
+        self.verbosity: int = verbosity
+        """
+        Verbosity of output when using random search
+        """
+        self.n_jobs: int = n_jobs
+        """
+        Number of processor cores to use
+        """
+        self.pkl = pickle_path
 
     def _sklearn_regression_meta(
         self,
@@ -460,8 +497,11 @@ class Calibrate:
         """
         x_secondary_cols = self.x_data.drop(self.target, axis=1).columns
         # All columns in x_data that aren't the target variable
-        products = [[np.nan, col] for col in x_secondary_cols]
-        secondary_vals = pd.MultiIndex.from_product(products)
+        if len(x_secondary_cols) > 0:
+            products = [[np.nan, col] for col in x_secondary_cols]
+            secondary_vals = pd.MultiIndex.from_product(products)
+        else:
+            secondary_vals = [None]
         # Get all possible combinations of secondary variables in a pandas
         # MultiIndex
         if self.models.get(name) is None:
@@ -476,7 +516,10 @@ class Calibrate:
                 # technique yet, add its key to the nested dictionary
             for sec_vals in secondary_vals:
                 # Loop over all combinations of secondary values
-                vals = [self.target] + [v for v in sec_vals if v == v]
+                if sec_vals is not None:
+                    vals = [self.target] + [v for v in sec_vals if v == v]
+                else:
+                    vals = [self.target]
                 vals_str = ' + '.join(vals)
                 if len(vals) < min_coeffs or len(vals) > max_coeffs:
                     # Skip if number of coeffs doesn't lie within acceptable
@@ -485,29 +528,30 @@ class Calibrate:
                     # only works with one variable
                     continue
                 self.models[name][scaler][vals_str] = dict()
-                if random_search:
-                    pipeline = Pipeline([
-                        ("Selector", ColumnTransformer([
-                                ("selector", "passthrough", vals)
-                            ], remainder="drop")
-                         ),
-                        ("Scaler", self.scaler_list[scaler]),
-                        ("Regression", reg)
-                        ])
-                    pipeline.fit(
-                        self.x_data,
-                        self.y_data.loc[:, self.target]
-                            )
-                    self.models[name][scaler][vals_str][0] = dc(pipeline)
-                    continue
-
+#                if random_search:
+#                    pipeline = Pipeline([
+#                        ("Selector", ColumnTransformer([
+#                                ("selector", "passthrough", vals)
+#                            ], remainder="drop")
+#                         ),
+#                        ("Scaler", self.scaler_list[scaler]),
+#                        ("Regression", reg)
+#                        ])
+#                    pipeline.fit(
+#                        self.x_data,
+#                        self.y_data.loc[:, self.target]
+#                            )
+#                    self.models[name][scaler][vals_str][0] = dc(pipeline)
+#                    continue
+#
                 for fold in self.y_data.loc[:, 'Fold'].unique():
+                    if fold == 'Validation':
+                        continue
                     y_data = self.y_data[
                             self.y_data.loc[:, 'Fold'] != fold
                             ]
                     if reg in ['t', 'gaussian']:
                         # If using PyMC bayesian model,
-                        # format data and build model using bambi
                         # then store result in pipeline
                         # Currently doesn't work as PyMC models
                         # can't be pickled, so don't function with deepcopy.
@@ -551,7 +595,15 @@ class Calibrate:
                                 self.x_data.loc[y_data.index, :],
                                 y_data.loc[:, self.target]
                                 )
-                    self.models[name][scaler][vals_str][fold] = dc(pipeline)
+                    if isinstance(self.pkl, Path):
+                        pkl_path = self.pkl / name / scaler / vals_str 
+                        pkl_path.mkdir(parents=True, exist_ok=True)
+                        pkl_file = pkl_path / f'{fold}.pkl'
+                        with pkl_file.open('wb') as pkl:
+                            pickle.dump(pipeline, pkl)
+                        self.models[name][scaler][vals_str][fold] = pkl_file
+                    else:
+                        self.models[name][scaler][vals_str][fold] = dc(pipeline)
 
     def pymc_bayesian(
             self,
@@ -602,7 +654,7 @@ class Calibrate:
         ] = {
         },
         **kwargs
-            ):
+        ):
         """
         Fit x on y via linear regression
 
@@ -625,6 +677,9 @@ class Calibrate:
             classifier = RandomizedSearchCV(
                 lm.LinearRegression(**kwargs),
                 parameters,
+                n_iter=self.rs_iter,
+                verbose=self.verbosity,
+                n_jobs=self.n_jobs,
                 cv=self.folds
             )
         else:
@@ -682,6 +737,9 @@ class Calibrate:
             classifier = RandomizedSearchCV(
                 lm.Ridge(**kwargs),
                 parameters,
+                n_iter=self.rs_iter,
+                verbose=self.verbosity,
+                n_jobs=self.n_jobs,
                 cv=self.folds
             )
         else:
@@ -756,6 +814,9 @@ class Calibrate:
             classifier = RandomizedSearchCV(
                 lm.Lasso(**kwargs),
                 parameters,
+                n_iter=self.rs_iter,
+                verbose=self.verbosity,
+                n_jobs=self.n_jobs,
                 cv=self.folds
             )
         else:
@@ -787,80 +848,6 @@ class Calibrate:
         _ = random_search
         self._sklearn_regression_meta(
             lm.LassoCV(**kwargs, cv=self.folds),
-            name,
-            random_search=True
-        )
-
-    def multi_task_lasso(
-        self,
-        name: str = "Multi-task Lasso Regression",
-        random_search: bool = False,
-        parameters: dict[
-            str,
-            Union[
-                scipy.stats.rv_continuous,
-                List[Union[int, str, float]]
-            ]
-        ] = {
-            'alpha': uniform(loc=0, scale=2),
-            'tol': uniform(loc=0, scale=1),
-            'selection': ['cyclic', 'random']
-        },
-        **kwargs
-            ):
-        """
-        Fit x on y via multitask lasso regression
-
-        Parameters
-        ----------
-        name : str, default="Multi-task Lasso Regression"
-            Name of classification technique.
-        random_search : bool, default=False
-            Whether to perform RandomizedSearch to optimise parameters
-        parameters : dict[
-                str,
-                Union[
-                    scipy.stats.rv_continuous,
-                    List[Union[int, str, float]]
-                ]
-            ], default=Preset distributions
-            The parameters used in RandomizedSearchCV
-        """
-        if random_search:
-            classifier = RandomizedSearchCV(
-                lm.MultiTaskLasso(**kwargs),
-                parameters,
-                cv=self.folds
-            )
-        else:
-            classifier = lm.MultiTaskLasso(**kwargs)
-        self._sklearn_regression_meta(
-            classifier,
-            f'{name}{" (Random Search)" if random_search else ""}',
-            random_search=random_search
-        )
-
-    def multi_task_lasso_cv(
-            self,
-            name: str = "Multi-task Lasso Regression (Cross Validated)",
-            random_search: bool = False,
-            **kwargs
-            ):
-        """
-        Fit x on y via cross-validated multitask lasso regression.
-        Already cross validated so random search not required
-
-        Parameters
-        ----------
-        name : str, default="Multi-task Lasso Regression (Cross Validated)"
-            Name of classification technique
-        random_search : bool, default=False
-            Not used
-
-        """
-        _ = random_search
-        self._sklearn_regression_meta(
-            lm.MultiTaskLassoCV(**kwargs, cv=self.folds),
             name,
             random_search=True
         )
@@ -905,6 +892,9 @@ class Calibrate:
             classifier = RandomizedSearchCV(
                 lm.ElasticNet(**kwargs),
                 parameters,
+                n_iter=self.rs_iter,
+                verbose=self.verbosity,
+                n_jobs=self.n_jobs,
                 cv=self.folds
             )
         else:
@@ -935,82 +925,6 @@ class Calibrate:
         _ = random_search
         self._sklearn_regression_meta(
             lm.ElasticNetCV(**kwargs, cv=self.folds),
-            name,
-            random_search=True
-        )
-
-    def multi_task_elastic_net(
-        self,
-        name: str = "Multi-task Elastic Net Regression",
-        random_search: bool = False,
-        parameters: dict[
-            str,
-            Union[
-                scipy.stats.rv_continuous,
-                List[Union[int, str, float]]
-            ]
-        ] = {
-            'alpha': uniform(loc=0, scale=2),
-            'l1_ratio': uniform(loc=0, scale=1),
-            'tol': uniform(loc=0, scale=1),
-            'selection': ['cyclic', 'random']
-        },
-        **kwargs
-            ):
-        """
-        Fit x on y via elastic net regression
-
-        Parameters
-        ----------
-        name : str, default="Multi-task Elastic Net Regression"
-            Name of classification technique.
-        random_search : bool, default=False
-            Whether to perform RandomizedSearch to optimise parameters
-        parameters : dict[
-                str,
-                Union[
-                    scipy.stats.rv_continuous,
-                    List[Union[int, str, float]]
-                ]
-            ], default=Preset distributions
-            The parameters used in RandomizedSearchCV
-        """
-        if random_search:
-            classifier = RandomizedSearchCV(
-                lm.MultiTaskElasticNet(**kwargs),
-                parameters,
-                cv=self.folds
-            )
-        else:
-            classifier = lm.MultiTaskElasticNet(**kwargs)
-        self._sklearn_regression_meta(
-            classifier,
-            f'{name}{" (Random Search)" if random_search else ""}',
-            random_search=random_search
-        )
-
-    def multi_task_elastic_net_cv(
-            self,
-            name: str = "Multi-Task Elastic Net Regression (Cross Validated)",
-            random_search: bool = False,
-            **kwargs
-            ):
-        """
-        Fit x on y via cross-validated multi-task elastic net regression.
-        Already cross validated so random search not required
-
-        Parameters
-        ----------
-        name : str, default="Multi-Task Elastic Net Regression \
-        (Cross Validated)"
-            Name of classification technique
-        random_search : bool, default=False
-            Not used
-
-        """
-        _ = random_search
-        self._sklearn_regression_meta(
-            lm.MultiTaskElasticNetCV(**kwargs, cv=self.folds),
             name,
             random_search=True
         )
@@ -1052,6 +966,9 @@ class Calibrate:
             classifier = RandomizedSearchCV(
                 lm.Lars(**kwargs),
                 parameters,
+                n_iter=self.rs_iter,
+                verbose=self.verbosity,
+                n_jobs=self.n_jobs,
                 cv=self.folds
             )
         else:
@@ -1099,6 +1016,9 @@ class Calibrate:
             classifier = RandomizedSearchCV(
                 lm.LassoLars(**kwargs),
                 parameters,
+                n_iter=self.rs_iter,
+                verbose=self.verbosity,
+                n_jobs=self.n_jobs,
                 cv=self.folds
             )
         else:
@@ -1146,6 +1066,9 @@ class Calibrate:
             classifier = RandomizedSearchCV(
                 lm.OrthogonalMatchingPursuit(**kwargs),
                 parameters,
+                n_iter=self.rs_iter,
+                verbose=self.verbosity,
+                n_jobs=self.n_jobs,
                 cv=self.folds
             )
         else:
@@ -1198,6 +1121,9 @@ class Calibrate:
             classifier = RandomizedSearchCV(
                 lm.BayesianRidge(**kwargs),
                 parameters,
+                n_iter=self.rs_iter,
+                verbose=self.verbosity,
+                n_jobs=self.n_jobs,
                 cv=self.folds
             )
         else:
@@ -1249,6 +1175,9 @@ class Calibrate:
             classifier = RandomizedSearchCV(
                 lm.ARDRegression(**kwargs),
                 parameters,
+                n_iter=self.rs_iter,
+                verbose=self.verbosity,
+                n_jobs=self.n_jobs,
                 cv=self.folds
             )
         else:
@@ -1286,12 +1215,12 @@ class Calibrate:
             Name of classification technique.
         random_search : bool, default=False
             Whether to perform RandomizedSearch to optimise parameters
-        parameters : dict[
-                str,
-                Union[
-                    scipy.stats.rv_continuous,
-                    List[Union[int, str, float]]
-                ]
+        parameters : dict[\
+                str,\
+                Union[\
+                    scipy.stats.rv_continuous,\
+                    List[Union[int, str, float]]\
+                ]\
             ], default=Preset distributions
             The parameters used in RandomizedSearchCV
         """
@@ -1299,6 +1228,9 @@ class Calibrate:
             classifier = RandomizedSearchCV(
                 lm.TweedieRegressor(**kwargs),
                 parameters,
+                n_iter=self.rs_iter,
+                verbose=self.verbosity,
+                n_jobs=self.n_jobs,
                 cv=self.folds
             )
         else:
@@ -1370,6 +1302,9 @@ class Calibrate:
             classifier = RandomizedSearchCV(
                 lm.SGDRegressor(**kwargs),
                 parameters,
+                n_iter=self.rs_iter,
+                verbose=self.verbosity,
+                n_jobs=self.n_jobs,
                 cv=self.folds
             )
         else:
@@ -1402,7 +1337,7 @@ class Calibrate:
         **kwargs
             ):
         """
-        Fit x on y via stochastic gradient descent regression
+        Fit x on y via passive aggressive regression
 
         Parameters
         ----------
@@ -1423,6 +1358,9 @@ class Calibrate:
             classifier = RandomizedSearchCV(
                 lm.PassiveAggressiveRegressor(**kwargs),
                 parameters,
+                n_iter=self.rs_iter,
+                verbose=self.verbosity,
+                n_jobs=self.n_jobs,
                 cv=self.folds
             )
         else:
@@ -1448,7 +1386,8 @@ class Calibrate:
                 lm.LinearRegression(),
                 lm.TheilSenRegressor(),
                 lm.LassoLarsCV()
-            ]
+            ],
+            'min_samples': [1E-4, 1E-3, 1E-2]
         },
         **kwargs
             ):
@@ -1474,6 +1413,9 @@ class Calibrate:
             classifier = RandomizedSearchCV(
                 lm.RANSACRegressor(**kwargs),
                 parameters,
+                n_iter=self.rs_iter,
+                verbose=self.verbosity,
+                n_jobs=self.n_jobs,
                 cv=self.folds
             )
         else:
@@ -1521,6 +1463,9 @@ class Calibrate:
             classifier = RandomizedSearchCV(
                 lm.TheilSenRegressor(**kwargs),
                 parameters,
+                n_iter=self.rs_iter,
+                verbose=self.verbosity,
+                n_jobs=self.n_jobs,
                 cv=self.folds
             )
         else:
@@ -1570,6 +1515,9 @@ class Calibrate:
             classifier = RandomizedSearchCV(
                 lm.HuberRegressor(**kwargs),
                 parameters,
+                n_iter=self.rs_iter,
+                verbose=self.verbosity,
+                n_jobs=self.n_jobs,
                 cv=self.folds
             )
         else:
@@ -1593,7 +1541,6 @@ class Calibrate:
         ] = {
             'quantile': uniform(loc=0, scale=2),
             'alpha': uniform(loc=0, scale=2),
-            'tol': uniform(loc=0, scale=1),
             'solver': [
                 'highs-ds',
                 'highs-ipm',
@@ -1626,10 +1573,13 @@ class Calibrate:
             classifier = RandomizedSearchCV(
                 lm.QuantileRegressor(**kwargs),
                 parameters,
+                n_iter=self.rs_iter,
+                verbose=self.verbosity,
+                n_jobs=self.n_jobs,
                 cv=self.folds
-            )
+                        )
         else:
-            classifier = lm.QuantileRegressor(**kwargs)
+            classifier = lm.QuantileRegressor(solver='highs', **kwargs)
         self._sklearn_regression_meta(
             classifier,
             f'{name}{" (Random Search)" if random_search else ""}',
@@ -1688,6 +1638,9 @@ class Calibrate:
             classifier = RandomizedSearchCV(
                 tree.DecisionTreeRegressor(**kwargs),
                 parameters,
+                n_iter=self.rs_iter,
+                verbose=self.verbosity,
+                n_jobs=self.n_jobs,
                 cv=self.folds
             )
         else:
@@ -1750,6 +1703,9 @@ class Calibrate:
             classifier = RandomizedSearchCV(
                 tree.ExtraTreeRegressor(**kwargs),
                 parameters,
+                n_iter=self.rs_iter,
+                verbose=self.verbosity,
+                n_jobs=self.n_jobs,
                 cv=self.folds
             )
         else:
@@ -1771,8 +1727,7 @@ class Calibrate:
                 List[Union[int, str, float]]
             ]
         ] = {
-            'n_estimators': [5, 10, 25, 50, 100, 200, 250,  500],
-            'bootstrap': [True, False],
+            'n_estimators': [5, 25, 100, 250],
             'max_samples': uniform(loc=0.01, scale=0.99),
             'criterion': [
                 'squared_error',
@@ -1809,12 +1764,15 @@ class Calibrate:
         """
         if random_search:
             classifier = RandomizedSearchCV(
-                en.RandomForestRegressor(**kwargs),
+                en.RandomForestRegressor(bootstrap=True, **kwargs),
                 parameters,
+                n_iter=self.rs_iter,
+                verbose=self.verbosity,
+                n_jobs=self.n_jobs,
                 cv=self.folds
             )
         else:
-            classifier = en.RandomForestRegressor(**kwargs)
+            classifier = en.RandomForestRegressor(bootstrap=True, **kwargs)
         self._sklearn_regression_meta(
             classifier,
             f'{name}{" (Random Search)" if random_search else ""}',
@@ -1832,8 +1790,7 @@ class Calibrate:
                 List[Union[int, str, float]]
             ]
         ] = {
-            'n_estimators': [5, 10, 25, 50, 100, 200, 250,  500],
-            'bootstrap': [True, False],
+            'n_estimators': [5, 25, 100, 250],
             'max_samples': uniform(loc=0.01, scale=0.99),
             'criterion': [
                 'squared_error',
@@ -1870,12 +1827,15 @@ class Calibrate:
         """
         if random_search:
             classifier = RandomizedSearchCV(
-                en.ExtraTreesRegressor(**kwargs),
+                en.ExtraTreesRegressor(bootstrap=True, **kwargs),
                 parameters,
+                n_iter=self.rs_iter,
+                verbose=self.verbosity,
+                n_jobs=self.n_jobs,
                 cv=self.folds
             )
         else:
-            classifier = en.ExtraTreesRegressor(**kwargs)
+            classifier = en.ExtraTreesRegressor(bootstrap=True, **kwargs)
         self._sklearn_regression_meta(
             classifier,
             f'{name}{" (Random Search)" if random_search else ""}',
@@ -1900,7 +1860,7 @@ class Calibrate:
                 'quantile'
             ],
             'learning_rate': uniform(loc=0, scale=2),
-            'n_estimators': [5, 10, 25, 50, 100, 200, 250,  500],
+            'n_estimators': [5, 25, 100, 250],
             'subsample': uniform(loc=0.01, scale=0.99),
             'criterion': [
                 'friedman_mse',
@@ -1943,6 +1903,9 @@ class Calibrate:
             classifier = RandomizedSearchCV(
                 en.GradientBoostingRegressor(**kwargs),
                 parameters,
+                n_iter=self.rs_iter,
+                verbose=self.verbosity,
+                n_jobs=self.n_jobs,
                 cv=self.folds
             )
         else:
@@ -2001,6 +1964,9 @@ class Calibrate:
             classifier = RandomizedSearchCV(
                 en.HistGradientBoostingRegressor(**kwargs),
                 parameters,
+                n_iter=self.rs_iter,
+                verbose=self.verbosity,
+                n_jobs=self.n_jobs,
                 cv=self.folds
             )
         else:
@@ -2041,15 +2007,6 @@ class Calibrate:
                 'adam'
             ],
             'alpha': uniform(loc=0, scale=0.1),
-            'batch_size': [
-                'auto',
-                20,
-                200,
-                500,
-                1000,
-                5000,
-                10000
-            ],
             'learning_rate': [
                 'constant',
                 'invscaling',
@@ -2062,7 +2019,7 @@ class Calibrate:
             'momentum': uniform(loc=0.1, scale=0.9),
             'beta_1': uniform(loc=0.1, scale=0.9),
             'beta_2': uniform(loc=0.1, scale=0.9),
-            'epsilon': uniform(loc=1E8, scale=1E6),
+            'epsilon': uniform(loc=1E-8, scale=1E-6),
 
         },
         **kwargs
@@ -2089,6 +2046,9 @@ class Calibrate:
             classifier = RandomizedSearchCV(
                 nn.MLPRegressor(**kwargs),
                 parameters,
+                n_iter=self.rs_iter,
+                verbose=self.verbosity,
+                n_jobs=self.n_jobs,
                 cv=self.folds
             )
         else:
@@ -2120,7 +2080,7 @@ class Calibrate:
             'gamma': ['scale', 'auto'],
             'coef0': uniform(loc=0, scale=1),
             'C': uniform(loc=0.1, scale=1.9),
-            'epsilon': uniform(loc=1E8, scale=1),
+            'epsilon': uniform(loc=1E-8, scale=1),
             'shrinking': [True, False]
         },
         **kwargs
@@ -2147,6 +2107,9 @@ class Calibrate:
             classifier = RandomizedSearchCV(
                 svm.SVR(**kwargs),
                 parameters,
+                n_iter=self.rs_iter,
+                verbose=self.verbosity,
+                n_jobs=self.n_jobs,
                 cv=self.folds
             )
         else:
@@ -2169,7 +2132,7 @@ class Calibrate:
             ]
         ] = {
             'C': uniform(loc=0.1, scale=1.9),
-            'epsilon': uniform(loc=1E8, scale=1),
+            'epsilon': uniform(loc=1E-8, scale=1),
             'loss': ['epsilon_insensitive', 'squared_epsilon_insensitive']
         },
         **kwargs
@@ -2196,6 +2159,9 @@ class Calibrate:
             classifier = RandomizedSearchCV(
                 svm.LinearSVR(**kwargs),
                 parameters,
+                n_iter=self.rs_iter,
+                verbose=self.verbosity,
+                n_jobs=self.n_jobs,
                 cv=self.folds
             )
         else:
@@ -2253,6 +2219,9 @@ class Calibrate:
             classifier = RandomizedSearchCV(
                 svm.NuSVR(**kwargs),
                 parameters,
+                n_iter=self.rs_iter,
+                verbose=self.verbosity,
+                n_jobs=self.n_jobs,
                 cv=self.folds
             )
         else:
@@ -2283,7 +2252,7 @@ class Calibrate:
                 kern.CompoundKernel,
                 kern.ExpSineSquared
             ],
-            'alpha': uniform(loc=0, scale=1E8),
+            'alpha': uniform(loc=0, scale=1E-8),
             'normalize_y': [True, False]
         },
         **kwargs
@@ -2310,6 +2279,9 @@ class Calibrate:
             classifier = RandomizedSearchCV(
                 gp.GaussianProcessRegressor(**kwargs),
                 parameters,
+                n_iter=self.rs_iter,
+                verbose=self.verbosity,
+                n_jobs=self.n_jobs,
                 cv=self.folds
             )
         else:
@@ -2319,6 +2291,7 @@ class Calibrate:
             f'{name}{" (Random Search)" if random_search else ""}',
             random_search=random_search
         )
+
 
     def isotonic(
         self,
@@ -2357,6 +2330,9 @@ class Calibrate:
             classifier = RandomizedSearchCV(
                 iso.IsotonicRegression(**kwargs),
                 parameters,
+                n_iter=self.rs_iter,
+                verbose=self.verbosity,
+                n_jobs=self.n_jobs,
                 cv=self.folds
             )
         else:
@@ -2379,7 +2355,7 @@ class Calibrate:
                 List[Union[int, str, float]]
             ]
         ] = {
-            'n_estimators': [5, 10, 25, 50, 100, 200, 250,  500],
+            'n_estimators': [5, 25, 100, 250],
             'max_bins': [1, 3, 7, 15, 31, 63, 127, 255],
             'grow_policy': [
                 'depthwise',
@@ -2416,6 +2392,9 @@ class Calibrate:
             classifier = RandomizedSearchCV(
                 xgb.XGBRegressor(**kwargs),
                 parameters,
+                n_iter=self.rs_iter,
+                verbose=self.verbosity,
+                n_jobs=self.n_jobs,
                 cv=self.folds
             )
         else:
@@ -2437,7 +2416,7 @@ class Calibrate:
                 List[Union[int, str, float]]
             ]
         ] = {
-            'n_estimators': [5, 10, 25, 50, 100, 200, 250,  500],
+            'n_estimators': [5, 25, 100, 250],
             'max_bin': [1, 3, 7, 15, 31, 63, 127, 255],
             'grow_policy': [
                 'depthwise',
@@ -2474,6 +2453,9 @@ class Calibrate:
             classifier = RandomizedSearchCV(
                 xgb.XGBRFRegressor(**kwargs),
                 parameters,
+                n_iter=self.rs_iter,
+                verbose=self.verbosity,
+                n_jobs=self.n_jobs,
                 cv=self.folds
             )
         else:
@@ -2528,3 +2510,9 @@ class Calibrate:
             trained on
         """
         return self.models
+
+    def clear_models(self):
+        """
+        """
+        del self.models
+        self.models = dict()
