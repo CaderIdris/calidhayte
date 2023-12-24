@@ -34,7 +34,11 @@ logger = logging.getLogger(f"__main__.{__name__}")
 def crmse(
     true: pd.Series, predicted: pd.Series, squared: bool = True, **kwargs
 ):
-    """ """
+    """
+    Calculate the centered root mean squared error between pred and true
+
+    $\\sqrt{\\frac{1}{N}\\sum_{n=1}^{N}[(p_n-\\bar{p}) - (t_n-\\bar{t})]^2}$
+    """
     centred_pred = predicted.sub(predicted.mean())
     centred_true = true.sub(true.mean())
     cmse = centred_pred.sub(centred_true).pow(2.0).mean()
@@ -45,34 +49,55 @@ def crmse(
 
 
 def mean_bias_error(true: pd.Series, predicted: pd.Series, **kwargs):
-    """ """
+    """
+    Calculates the mean bias error between pred and true
+
+    $\\frac{1}{N}\\sum_{n=1}^{N}[p_n - t_n]$
+    """
     return predicted.sub(true).mean()
 
 
 def ubrmse(true: pd.Series, predicted: pd.Series, **kwargs):
-    """ """
+    """
+    Calculates the unbiased root mean squared error between pred and true
+
+    $\\sqrt{\\frac{1}{N}\\sum_{n=1}^{N}[(p_n - t_n)^2] - (\\frac{1}{N}\\sum_\
+{n=1}^{N}[p_n - t_n])^2}$
+    """
     mse = met.mean_squared_error(true, predicted)
     bias = mean_bias_error(true, predicted)
     return np.sqrt(mse - (bias**2))
 
 
 def ref_mean(true: pd.Series, _: pd.Series, **kwargs):
-    """ """
+    """
+    Calculates mean of reference measurements, useful for
+    normalising errors
+    """
     return true.mean()
 
 
 def ref_sd(true: pd.Series, _: pd.Series, **kwargs):
-    """ """
+    """
+    Calculates standard deviation of reference measurements, useful for
+    normalising errors
+    """
     return true.std()
 
 
 def ref_range(true: pd.Series, _: pd.Series, **kwargs):
-    """ """
+    """
+    Calculates range of reference measurements, useful for
+    normalising errors
+    """
     return true.max() - true.min()
 
 
 def ref_iqr(true: pd.Series, _: pd.Series, **kwargs):
-    """ """
+    """
+    Calculates interquartile range of reference measurements, useful for
+    normalising errors
+    """
     return true.quantile(0.75) - true.quantile(0.25)
 
 
@@ -256,6 +281,7 @@ class Results:
                             ] = scaling_technique
                             self.errors.loc[idx, "Variables"] = vars
                             self.errors.loc[idx, "Fold"] = fold
+                            self.errors.loc[idx, "Count"] = true.shape[0]
                         self.errors.loc[idx, name] = error
                         idx = idx + 1
                     if idx not in self.errors.index:
@@ -433,32 +459,57 @@ sklearn.metrics.mean_tweedie_deviance\
             met.mean_pinball_loss, "Mean Pinball Deviance"
         )
 
-    def centred_rmse(self):
-        """ """
-        self._sklearn_error_meta(crmse, "Centred Root Mean Squared Error")
+    def centered_rmse(self):
+        """
+        Calculate the centered root mean squared error between pred and true
+
+        $\\sqrt{\\frac{1}{N}\\sum_{n=1}^{N}[(p_n-\\bar{p}) - (t_n-\\bar{t})]^2}$
+        """
+        self._sklearn_error_meta(crmse, "Centered Root Mean Squared Error")
 
     def unbiased_rmse(self):
-        """ """
+        """
+        Calculates the unbiased root mean squared error between pred and true
+
+        $\\sqrt{\\frac{1}{N}\\sum_{n=1}^{N}[(p_n - t_n)^2] - (\\frac{1}{N}\\\
+sum_{n=1}^{N}[p_n - t_n])^2}$
+        """
         self._sklearn_error_meta(ubrmse, "Unbiased Root Mean Squared Error")
 
     def mbe(self):
-        """ """
+        """
+        Calculates the mean bias error between pred and true
+
+        $\\frac{1}{N}\\sum_{n=1}^{N}[p_n - t_n]$
+        """
         self._sklearn_error_meta(mean_bias_error, "Mean Bias Error")
 
     def ref_iqr(self):
-        """ """
+        """
+        Calculates interquartile range of reference measurements, useful for
+        normalising errors
+        """
         self._sklearn_error_meta(ref_iqr, "Reference Interquartile Range")
 
     def ref_mean(self):
-        """ """
+        """
+        Calculates mean of reference measurements, useful for
+        normalising errors
+        """
         self._sklearn_error_meta(ref_mean, "Reference Mean")
 
     def ref_range(self):
-        """ """
+        """
+        Calculates range of reference measurements, useful for
+        normalising errors
+        """
         self._sklearn_error_meta(ref_range, "Reference Range")
 
     def ref_sd(self):
-        """ """
+        """
+        Calculates standard deviation of reference measurements, useful for
+        normalising errors
+        """
         self._sklearn_error_meta(ref_sd, "Reference Standard Deviation")
 
     def return_errors(self) -> pd.DataFrame:

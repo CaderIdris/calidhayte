@@ -61,6 +61,13 @@ def test_prepare_datasets(trained_models):
         Results.mean_absolute_percentage,
         Results.r2,
         Results.mean_pinball_loss,
+        Results.centered_rmse,
+        Results.mbe,
+        Results.ref_iqr,
+        Results.ref_mean,
+        Results.ref_range,
+        Results.ref_sd,
+        Results.unbiased_rmse
     ]
     for err in errs:
         err(results)
@@ -73,6 +80,6 @@ def test_prepare_datasets(trained_models):
 
     tests["Correct num of rows"] = res.shape[0] == 3 * 8 * 6
 
-    tests["Correct num of cols"] = res.shape[1] == 12
+    tests["Correct num of cols"] = res.shape[1] == 20
 
     assert all(tests.values())

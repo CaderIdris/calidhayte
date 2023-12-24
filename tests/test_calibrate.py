@@ -103,6 +103,8 @@ def test_skl_cals(full_data, rsearch):
         Calibrate.tweedie,
         Calibrate.xgboost,
         Calibrate.xgboost_rf,
+        Calibrate.linear_gam,
+        Calibrate.expectile_gam
         # Calibrate.pymc_bayesian
     ]
     coeff_inst = Calibrate(

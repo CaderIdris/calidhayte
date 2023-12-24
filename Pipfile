@@ -12,6 +12,7 @@ shap = "*"
 xgboost = "*"
 matplotlib = "*"
 calidhayte = {file = "."}
+pygam = "*"
 
 [dev-packages]
 tox = "*"

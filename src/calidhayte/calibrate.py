@@ -21,6 +21,7 @@ import warnings
 # import bambi as bmb
 import numpy as np
 import pandas as pd
+from pygam import GAM, LinearGAM, ExpectileGAM
 import scipy
 from scipy.stats import uniform
 import sklearn as skl
@@ -460,6 +461,7 @@ class Calibrate:
         reg: Union[
             skl.base.RegressorMixin,
             RandomizedSearchCV,
+            GAM,
             Literal["t", "gaussian"],
         ],
         name: str,
@@ -2246,6 +2248,101 @@ class Calibrate:
             )
         else:
             classifier = xgb.XGBRFRegressor(**kwargs)
+        self._sklearn_regression_meta(
+            classifier,
+            f'{name}{" (Random Search)" if random_search else ""}',
+            random_search=random_search,
+        )
+
+    def linear_gam(
+        self,
+        name: str = "Linear GAM",
+        random_search: bool = False,
+        parameters: dict[
+            str, Union[scipy.stats.rv_continuous, List[Union[int, str, float]]]
+        ] = {
+            "max_iter": [100, 500, 1000],
+            "callbacks": ['deviance', 'diffs']
+        },
+        **kwargs,
+    ):
+        """
+        Fit x on y via a linear GAM
+
+        Parameters
+        ----------
+        name : str, default="Linear GAM"
+            Name of classification technique.
+        random_search : bool, default=False
+            Whether to perform RandomizedSearch to optimise parameters
+        parameters : dict[\
+                str,\
+                Union[\
+                    scipy.stats.rv_continuous,\
+                    List[Union[int, str, float]]\
+                ]\
+            ], default=Preset distributions
+            The parameters used in RandomizedSearchCV
+        """
+        if random_search:
+            classifier = RandomizedSearchCV(
+                LinearGAM(**kwargs),
+                parameters,
+                n_iter=self.rs_iter,
+                verbose=self.verbosity,
+                n_jobs=self.n_jobs,
+                cv=self.folds,
+            )
+        else:
+            classifier = LinearGAM(**kwargs)
+        self._sklearn_regression_meta(
+            classifier,
+            f'{name}{" (Random Search)" if random_search else ""}',
+            random_search=random_search,
+        )
+
+    def expectile_gam(
+        self,
+        name: str = "Expectile GAM",
+        random_search: bool = False,
+        parameters: dict[
+            str, Union[scipy.stats.rv_continuous, List[Union[int, str, float]]]
+        ] = {
+            "max_iter": [100, 500, 1000],
+            "callbacks": ['deviance', 'diffs'],
+            "expectile": uniform(loc=0, scale=1)
+        },
+        **kwargs,
+    ):
+        """
+        Fit x on y via an expectile GAM
+
+        Parameters
+        ----------
+        name : str, default="Expectile GAM"
+            Name of classification technique.
+        random_search : bool, default=False
+            Whether to perform RandomizedSearch to optimise parameters
+        parameters : dict[\
+                str,\
+                Union[\
+                    scipy.stats.rv_continuous,\
+                    List[Union[int, str, float]]\
+                ]\
+            ], default=Preset distributions
+            The parameters used in RandomizedSearchCV
+        """
+        if random_search:
+            classifier = RandomizedSearchCV(
+                ExpectileGAM(**kwargs),
+                parameters,
+                n_iter=self.rs_iter,
+                verbose=self.verbosity,
+                n_jobs=self.n_jobs,
+                cv=self.folds,
+            )
+        else:
+            classifier = ExpectileGAM(**kwargs)
         self._sklearn_regression_meta(
             classifier,
             f'{name}{" (Random Search)" if random_search else ""}',
