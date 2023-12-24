@@ -2260,10 +2260,7 @@ class Calibrate:
         random_search: bool = False,
         parameters: dict[
             str, Union[scipy.stats.rv_continuous, List[Union[int, str, float]]]
-        ] = {
-            "max_iter": [100, 500, 1000],
-            "callbacks": ['deviance', 'diffs']
-        },
+        ] = {"max_iter": [100, 500, 1000], "callbacks": ["deviance", "diffs"]},
         **kwargs,
     ):
         """
@@ -2309,8 +2306,8 @@ class Calibrate:
             str, Union[scipy.stats.rv_continuous, List[Union[int, str, float]]]
         ] = {
             "max_iter": [100, 500, 1000],
-            "callbacks": ['deviance', 'diffs'],
-            "expectile": uniform(loc=0, scale=1)
+            "callbacks": ["deviance", "diffs"],
+            "expectile": uniform(loc=0, scale=1),
         },
         **kwargs,
     ):

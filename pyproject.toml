@@ -1,7 +1,7 @@
 [project]
 name = "calidhayte"
 version = "2.0.0dev"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 description = "Calibrate raw measurements against reference measurements using one or more variables"
 authors = [
 	{name="Idris Hayward", email="CaderIdrisGH@outlook.com"}
@@ -72,12 +72,12 @@ no_implicit_reexport = true
 legacy_tox_ini = """
 	[tox]
 	minversion = 4.0
-	envlist = py39, py311, flake8, mypy
+	envlist = py310, py311, flake8, mypy
 	isolated_build = true
 
 	[gh-actions]
 	python =
-		3.9: py39
+		3.9: py310
 		3.11: py311, mypy, flake8
 
 	[testenv]

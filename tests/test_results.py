@@ -67,7 +67,7 @@ def test_prepare_datasets(trained_models):
         Results.ref_mean,
         Results.ref_range,
         Results.ref_sd,
-        Results.unbiased_rmse
+        Results.unbiased_rmse,
     ]
     for err in errs:
         err(results)

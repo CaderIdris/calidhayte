@@ -463,7 +463,8 @@ sklearn.metrics.mean_tweedie_deviance\
         """
         Calculate the centered root mean squared error between pred and true
 
-        $\\sqrt{\\frac{1}{N}\\sum_{n=1}^{N}[(p_n-\\bar{p}) - (t_n-\\bar{t})]^2}$
+        $\\sqrt{\\frac{1}{N}\\sum_{n=1}^{N}[(p_n-\\bar{p}) - \
+(t_n-\\bar{t})]^2}$
         """
         self._sklearn_error_meta(crmse, "Centered Root Mean Squared Error")
 
