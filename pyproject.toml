@@ -31,6 +31,10 @@ build-backend = "setuptools.build_meta"
 [tool.flake8]
 exclude = "docs"
 
+[tool.black]
+line-length = 79
+include = '\.pyi?$'
+
 [tool.pytest.ini_options]
 testpaths = [
 	"tests"

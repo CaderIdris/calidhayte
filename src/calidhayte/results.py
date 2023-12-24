@@ -17,17 +17,64 @@ import pandas as pd
 from sklearn import metrics as met
 from sklearn.pipeline import Pipeline
 
-CoefficientPipelineDict: TypeAlias = dict[str,  # Technique name
-                                          dict[str,  # Scaling technique
-                                               dict[str,  # Variable combo
-                                                    dict[int,  # Fold
-                                                         Union[
-                                                            Path, Pipeline]]]]]
+CoefficientPipelineDict: TypeAlias = dict[
+    str,  # Technique name
+    dict[
+        str,  # Scaling technique
+        dict[str, dict[int, Union[Path, Pipeline]]],  # Variable combo  # Fold
+    ],
+]
 """
 Type alias for the nested dictionaries that the models are stored in
 """
 
-logger = logging.getLogger(f'__main__.{__name__}')
+logger = logging.getLogger(f"__main__.{__name__}")
+
+
+def crmse(
+    true: pd.Series, predicted: pd.Series, squared: bool = True, **kwargs
+):
+    """ """
+    centred_pred = predicted.sub(predicted.mean())
+    centred_true = true.sub(true.mean())
+    cmse = centred_pred.sub(centred_true).pow(2.0).mean()
+    if not squared:
+        return cmse
+    else:
+        return np.sqrt(cmse)
+
+
+def mean_bias_error(true: pd.Series, predicted: pd.Series, **kwargs):
+    """ """
+    return predicted.sub(true).mean()
+
+
+def ubrmse(true: pd.Series, predicted: pd.Series, **kwargs):
+    """ """
+    mse = met.mean_squared_error(true, predicted)
+    bias = mean_bias_error(true, predicted)
+    return np.sqrt(mse - (bias**2))
+
+
+def ref_mean(true: pd.Series, _: pd.Series, **kwargs):
+    """ """
+    return true.mean()
+
+
+def ref_sd(true: pd.Series, _: pd.Series, **kwargs):
+    """ """
+    return true.std()
+
+
+def ref_range(true: pd.Series, _: pd.Series, **kwargs):
+    """ """
+    return true.max() - true.min()
+
+
+def ref_iqr(true: pd.Series, _: pd.Series, **kwargs):
+    """ """
+    return true.quantile(0.75) - true.quantile(0.25)
+
 
 class Results:
     """
@@ -43,7 +90,7 @@ class Results:
         y_data: pd.DataFrame,
         target: str,
         models: CoefficientPipelineDict,
-        errors: pd.DataFrame = pd.DataFrame()
+        errors: pd.DataFrame = pd.DataFrame(),
     ):
         """
         Initialises the class
@@ -128,18 +175,17 @@ class Results:
         |...|...|...|...|...|...|...|...|
         |55|Extra Trees|None|x|2|0.43|...|0.52|
         """
-        self.pred_vals: dict[str, dict[ str, dict[str, pd.DataFrame]]] = dict()
+        self.pred_vals: dict[str, dict[str, dict[str, pd.DataFrame]]] = dict()
         """
         """
         self.cached_error_length: int = self.errors.shape[0]
 
     def _sklearn_error_meta(self, err: Any, name: str, **kwargs):
-        """
-        """
+        """ """
         idx = self.cached_error_length
-        true = self.y.loc[
-                :, self.target
-            ][self.y.loc[:, 'Fold'] == 'Validation']
+        true = self.y.loc[:, self.target][
+            self.y.loc[:, "Fold"] == "Validation"
+        ]
         for technique, scaling_techniques in self.models.items():
             if self.pred_vals.get(technique) is None:
                 self.pred_vals[technique] = dict()
@@ -147,57 +193,90 @@ class Results:
                 if self.pred_vals[technique].get(scaling_technique) is None:
                     self.pred_vals[technique][scaling_technique] = dict()
                 for vars, folds in var_combos.items():
-                    self.pred_vals[technique][scaling_technique][vars] = pd.DataFrame(index=true.index)
+                    self.pred_vals[technique][scaling_technique][
+                        vars
+                    ] = pd.DataFrame(index=true.index)
                     try:
-                        if self.errors.loc[
-                            (self.errors['Technique'] == technique) &
-                            (self.errors['Scaling Method'] == scaling_technique) &
-                            (self.errors['Variables'] == vars) 
-                        ].loc[:, name].notna().any(axis=None):
+                        if (
+                            self.errors.loc[
+                                (self.errors["Technique"] == technique)
+                                & (
+                                    self.errors["Scaling Method"]
+                                    == scaling_technique
+                                )
+                                & (self.errors["Variables"] == vars)
+                            ]
+                            .loc[:, name]
+                            .notna()
+                            .any(axis=None)
+                        ):
                             continue
                     except KeyError:
                         pass
                     for fold, pipe in folds.items():
-                        if fold not in self.pred_vals[technique][scaling_technique][vars].columns:
-                            pred_raw = self.x.loc[true.index, vars.split(' + ')]
+                        if (
+                            fold
+                            not in self.pred_vals[technique][
+                                scaling_technique
+                            ][vars].columns
+                        ):
+                            pred_raw = self.x.loc[
+                                true.index, vars.split(" + ")
+                            ]
                             if isinstance(pipe, Pipeline):
                                 pipe_to_use = pipe
                             elif isinstance(pipe, Path):
-                                with pipe.open('rb') as pkl:
+                                with pipe.open("rb") as pkl:
                                     pipe_to_use = pickle.load(pkl)
                             else:
                                 continue
                             pred_no_ind = pipe_to_use.predict(pred_raw)
-                            self.pred_vals[technique][scaling_technique][vars][fold] = pred_no_ind
-                        try: 
-                            predicted = self.pred_vals[technique][scaling_technique][vars][fold].dropna()
-                            error = err(true[predicted.index], predicted, **kwargs)
+                            self.pred_vals[technique][scaling_technique][vars][
+                                fold
+                            ] = pred_no_ind
+                        try:
+                            predicted = self.pred_vals[technique][
+                                scaling_technique
+                            ][vars][fold].dropna()
+                            error = err(
+                                true[predicted.index], predicted, **kwargs
+                            )
                         except ValueError as exc:
-                            logger.warning(technique, scaling_technique, vars, fold)
+                            logger.warning(
+                                technique, scaling_technique, vars, fold
+                            )
                             for arg in exc.args:
                                 logger.warning(arg)
                             error = np.nan
 
                         if idx not in self.errors.index:
-                            self.errors.loc[idx, 'Technique'] = technique
+                            self.errors.loc[idx, "Technique"] = technique
                             self.errors.loc[
-                                    idx, 'Scaling Method'
-                                    ] = scaling_technique
-                            self.errors.loc[idx, 'Variables'] = vars
-                            self.errors.loc[idx, 'Fold'] = fold
+                                idx, "Scaling Method"
+                            ] = scaling_technique
+                            self.errors.loc[idx, "Variables"] = vars
+                            self.errors.loc[idx, "Fold"] = fold
                         self.errors.loc[idx, name] = error
-                        idx = idx+1
+                        idx = idx + 1
                     if idx not in self.errors.index:
-                        self.errors.loc[idx, 'Technique'] = technique
+                        self.errors.loc[idx, "Technique"] = technique
                         self.errors.loc[
-                                idx, 'Scaling Method'
-                                ] = scaling_technique
-                        self.errors.loc[idx, 'Variables'] = vars
-                        self.errors.loc[idx, 'Fold'] = 'All'
-                    predicted = self.pred_vals[technique][scaling_technique][vars].mean(axis=1).dropna()
-                    error = err(self.y.loc[predicted.index, self.target], predicted, **kwargs)
+                            idx, "Scaling Method"
+                        ] = scaling_technique
+                        self.errors.loc[idx, "Variables"] = vars
+                        self.errors.loc[idx, "Fold"] = "All"
+                    predicted = (
+                        self.pred_vals[technique][scaling_technique][vars]
+                        .mean(axis=1)
+                        .dropna()
+                    )
+                    error = err(
+                        self.y.loc[predicted.index, self.target],
+                        predicted,
+                        **kwargs,
+                    )
                     self.errors.loc[idx, name] = error
-                    idx = idx+1
+                    idx = idx + 1
 
     def explained_variance_score(self):
         """Calculate the explained variance score between the true values (y)
@@ -209,9 +288,8 @@ sklearn.metrics.explained_variance_score\
         )
         """
         self._sklearn_error_meta(
-                met.explained_variance_score,
-                'Explained Variance Score'
-                )
+            met.explained_variance_score, "Explained Variance Score"
+        )
 
     def max(self):
         """Calculate the max error between the true values (y)
@@ -222,10 +300,7 @@ sklearn.metrics.explained_variance_score\
 sklearn.metrics.max_error\
         )
         """
-        self._sklearn_error_meta(
-                met.max_error,
-                'Max Error'
-                )
+        self._sklearn_error_meta(met.max_error, "Max Error")
 
     def mean_absolute(self):
         """Calculate the mean absolute error between the true values (y)
@@ -237,9 +312,8 @@ sklearn.metrics.mean_absolute_error\
         )
         """
         self._sklearn_error_meta(
-                met.mean_absolute_error,
-                'Mean Absolute Error'
-                )
+            met.mean_absolute_error, "Mean Absolute Error"
+        )
 
     def root_mean_squared(self):
         """Calculate the root mean squared error between the true values (y)
@@ -251,10 +325,8 @@ sklearn.metrics.mean_squared_error\
         )
         """
         self._sklearn_error_meta(
-                met.mean_squared_error,
-                'Root Mean Squared Error',
-                squared=False
-                )
+            met.mean_squared_error, "Root Mean Squared Error", squared=False
+        )
 
     def root_mean_squared_log(self):
         """Calculate the root mean squared log error between the true values
@@ -266,10 +338,10 @@ sklearn.metrics.mean_squared_log_error\
         )
         """
         self._sklearn_error_meta(
-                met.mean_squared_log_error,
-                'Root Mean Squared Log Error',
-                squared=False
-                )
+            met.mean_squared_log_error,
+            "Root Mean Squared Log Error",
+            squared=False,
+        )
 
     def median_absolute(self):
         """Calculate the median absolute error between the true values (y)
@@ -281,9 +353,8 @@ sklearn.metrics.median_absolute_error\
         )
         """
         self._sklearn_error_meta(
-                met.median_absolute_error,
-                'Median Absolute Error'
-                )
+            met.median_absolute_error, "Median Absolute Error"
+        )
 
     def mean_absolute_percentage(self):
         """Calculate the mean absolute percentage error between the true
@@ -295,9 +366,9 @@ sklearn.metrics.mean_absolute_percentage_error\
         )
         """
         self._sklearn_error_meta(
-                met.mean_absolute_percentage_error,
-                'Mean Absolute Percentage Error'
-                )
+            met.mean_absolute_percentage_error,
+            "Mean Absolute Percentage Error",
+        )
 
     def r2(self):
         """Calculate the r2 between the true values (y)
@@ -308,10 +379,7 @@ sklearn.metrics.mean_absolute_percentage_error\
 sklearn.metrics.r2_score\
         )
         """
-        self._sklearn_error_meta(
-                met.r2_score,
-                'r2'
-                )
+        self._sklearn_error_meta(met.r2_score, "r2")
 
     def mean_poisson_deviance(self):
         """Calculate the mean poisson deviance between the true values (y)
@@ -323,9 +391,8 @@ sklearn.metrics.mean_poisson_deviance\
         )
         """
         self._sklearn_error_meta(
-                met.mean_poisson_deviance,
-                'Mean Poisson Deviance'
-                )
+            met.mean_poisson_deviance, "Mean Poisson Deviance"
+        )
 
     def mean_gamma_deviance(self):
         """Calculate the mean gamma deviance between the true values (y)
@@ -337,9 +404,8 @@ sklearn.metrics.mean_gamma_deviance\
         )
         """
         self._sklearn_error_meta(
-                met.mean_gamma_deviance,
-                'Mean Gamma Deviance'
-                )
+            met.mean_gamma_deviance, "Mean Gamma Deviance"
+        )
 
     def mean_tweedie_deviance(self):
         """Calculate the mean tweedie deviance between the true values (y)
@@ -351,9 +417,8 @@ sklearn.metrics.mean_tweedie_deviance\
         )
         """
         self._sklearn_error_meta(
-                met.mean_tweedie_deviance,
-                'Mean Tweedie Deviance'
-                )
+            met.mean_tweedie_deviance, "Mean Tweedie Deviance"
+        )
 
     def mean_pinball_loss(self):
         """Calculate the mean pinball loss between the true values (y)
@@ -365,9 +430,36 @@ sklearn.metrics.mean_tweedie_deviance\
         )
         """
         self._sklearn_error_meta(
-                met.mean_pinball_loss,
-                'Mean Pinball Deviance'
-                )
+            met.mean_pinball_loss, "Mean Pinball Deviance"
+        )
+
+    def centred_rmse(self):
+        """ """
+        self._sklearn_error_meta(crmse, "Centred Root Mean Squared Error")
+
+    def unbiased_rmse(self):
+        """ """
+        self._sklearn_error_meta(ubrmse, "Unbiased Root Mean Squared Error")
+
+    def mbe(self):
+        """ """
+        self._sklearn_error_meta(mean_bias_error, "Mean Bias Error")
+
+    def ref_iqr(self):
+        """ """
+        self._sklearn_error_meta(ref_iqr, "Reference Interquartile Range")
+
+    def ref_mean(self):
+        """ """
+        self._sklearn_error_meta(ref_mean, "Reference Mean")
+
+    def ref_range(self):
+        """ """
+        self._sklearn_error_meta(ref_range, "Reference Range")
+
+    def ref_sd(self):
+        """ """
+        self._sklearn_error_meta(ref_sd, "Reference Standard Deviation")
 
     def return_errors(self) -> pd.DataFrame:
         """

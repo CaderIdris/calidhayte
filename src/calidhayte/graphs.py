@@ -25,11 +25,10 @@ class Graphs:
         y_name: str,
         target: str,
         models: dict[str, dict[str, dict[str, dict[int, Pipeline]]]],
-        style: str = 'bmh',
-        backend: str = str(get_backend())
+        style: str = "bmh",
+        backend: str = str(get_backend()),
     ):
-        """
-        """
+        """ """
         self.x: pd.DataFrame = x
         """
         Independent variable(s) that are calibrated against `y`,
@@ -53,10 +52,11 @@ class Graphs:
         Measurand in `y` to calibrate against
         """
         self.models: dict[
-            str, dict[  # Scaling Method
-                str, dict[  # Variables used
-                    str, dict[  # Fold
-                        int, Pipeline]]]] = models
+            str,
+            dict[  # Scaling Method
+                str, dict[str, dict[int, Pipeline]]  # Variables used  # Fold
+            ],
+        ] = models
         """
         The precalibrated models. They are stored in a nested structure as
         follows:
@@ -92,11 +92,16 @@ class Graphs:
               }
         ```
         """
-        self.plots: dict[str,  # Technique
-                         dict[str,  # Scaling Method
-                              dict[str,  # Variables used
-                                   dict[str,  # Plot Name
-                                        matplotlib.figure.Figure]]]] = dict()
+        self.plots: dict[
+            str,  # Technique
+            dict[
+                str,  # Scaling Method
+                dict[
+                    str,  # Variables used
+                    dict[str, matplotlib.figure.Figure],  # Plot Name
+                ],
+            ],
+        ] = dict()
         """
         The plotted data, stored in a similar structure to `models`
         1. Primary Key, name of the technique (e.g Lasso Regression).
@@ -141,12 +146,9 @@ class Graphs:
 
     def plot_meta(
         self,
-        plot_func: Callable[
-            ...,
-            matplotlib.figure.Figure
-        ],
+        plot_func: Callable[..., matplotlib.figure.Figure],
         name: str,
-        **kwargs
+        **kwargs,
     ):
         """
         Iterates over data and creates plots using function specified in
@@ -164,12 +166,15 @@ class Graphs:
         **kwargs
             Additional arguments passed to `plot_func`
         """
-        if not self.x.sort_index().index.to_series().eq(
-            self.y.sort_index().index.to_series()
-        ).all():
+        if (
+            not self.x.sort_index()
+            .index.to_series()
+            .eq(self.y.sort_index().index.to_series())
+            .all()
+        ):
             raise ValueError(
-                'Index of x and y do not match. Output of Calibrate class '
-                'in calidhayte should have matching indexes'
+                "Index of x and y do not match. Output of Calibrate class "
+                "in calidhayte should have matching indexes"
             )
         for technique, scaling_methods in self.models.items():
             if self.plots.get(technique) is None:
@@ -183,108 +188,95 @@ class Graphs:
                     pred = pd.Series()
                     for fold, model in folds.items():
                         x_data = self.x.loc[
-                                self.y[self.y.loc[:, 'Fold'] == fold].index,
-                                :
-                                ]
+                            self.y[self.y.loc[:, "Fold"] == fold].index, :
+                        ]
                         pred = pd.concat(
-                                [
-                                    pred,
-                                    pd.Series(
-                                        index=x_data.index,
-                                        data=model.predict(x_data)
-                                        )
-                                ]
-                            )
+                            [
+                                pred,
+                                pd.Series(
+                                    index=x_data.index,
+                                    data=model.predict(x_data),
+                                ),
+                            ]
+                        )
                     x = pred
                     y = self.y.loc[:, self.target].reindex(x.index)
                     fig = plot_func(
-                            x=x,
-                            y=y,
-                            x_name=self.x_name,
-                            y_name=self.y_name,
-                            **kwargs
-                            )
+                        x=x,
+                        y=y,
+                        x_name=self.x_name,
+                        y_name=self.y_name,
+                        **kwargs,
+                    )
                     self.plots[technique][scaling_method][vars][name] = fig
 
     def bland_altman_plot(self, title=None):
-        with plt.rc_context({'backend': self.backend}), \
-                plt.style.context(self.style):
-            self.plot_meta(bland_altman_plot, 'Bland-Altman', title=title)
+        with plt.rc_context({"backend": self.backend}), plt.style.context(
+            self.style
+        ):
+            self.plot_meta(bland_altman_plot, "Bland-Altman", title=title)
 
     def ecdf_plot(self, title=None):
-        with plt.rc_context({'backend': self.backend}), \
-                plt.style.context(self.style):
-            self.plot_meta(ecdf_plot, 'eCDF', title=title)
+        with plt.rc_context({"backend": self.backend}), plt.style.context(
+            self.style
+        ):
+            self.plot_meta(ecdf_plot, "eCDF", title=title)
 
     def lin_reg_plot(self, title=None):
-        with plt.rc_context({'backend': self.backend}), \
-                plt.style.context(self.style):
-            self.plot_meta(lin_reg_plot, 'Linear Regression', title=title)
+        with plt.rc_context({"backend": self.backend}), plt.style.context(
+            self.style
+        ):
+            self.plot_meta(lin_reg_plot, "Linear Regression", title=title)
 
     def shap(self, pipeline_keys: list[str], title=None):
         x = self.x
         y = self.y
-        pipeline = self.models[
-            pipeline_keys[0]
-            ][
-                pipeline_keys[1]
-                ][
-                    pipeline_keys[2]
-                    ]
+        pipeline = self.models[pipeline_keys[0]][pipeline_keys[1]][
+            pipeline_keys[2]
+        ]
 
         if not self.plots.get(pipeline_keys[0]):
             self.plots[pipeline_keys[0]] = dict()
         if not self.plots[pipeline_keys[0]].get(pipeline_keys[1]):
             self.plots[pipeline_keys[0]][pipeline_keys[1]] = dict()
-        if not self.plots[
-            pipeline_keys[0]
-                ][
-                pipeline_keys[1]
-                    ].get(pipeline_keys[2]):
-
-            self.plots[
-                pipeline_keys[0]
-                    ][
-                        pipeline_keys[1]][pipeline_keys[2]] = dict()
-        with plt.rc_context({'backend': self.backend}), \
-                plt.style.context(self.style):
+        if not self.plots[pipeline_keys[0]][pipeline_keys[1]].get(
+            pipeline_keys[2]
+        ):
+            self.plots[pipeline_keys[0]][pipeline_keys[1]][
+                pipeline_keys[2]
+            ] = dict()
+        with plt.rc_context({"backend": self.backend}), plt.style.context(
+            self.style
+        ):
             shap_df = get_shap(x, y, pipeline)
-            self.plots[
-                pipeline_keys[0]
-                    ][
-                        pipeline_keys[1]
-                        ][
-                            pipeline_keys[2]
-                            ][
-                                'Shap'
-                                ] = shap_plot(shap_df, x)
+            self.plots[pipeline_keys[0]][pipeline_keys[1]][pipeline_keys[2]][
+                "Shap"
+            ] = shap_plot(shap_df, x)
 
     def save_plots(
         self,
         path: str,
         filetype: Union[
-           Literal['png', 'pgf', 'pdf'],
-           Iterable[Literal['png', 'pgf', 'pdf']]
-            ] = 'png'
+            Literal["png", "pgf", "pdf"],
+            Iterable[Literal["png", "pgf", "pdf"]],
+        ] = "png",
     ):
         for technique, scaling_methods in self.plots.items():
             for scaling_method, var_combos in scaling_methods.items():
                 for vars, figures in var_combos.items():
                     for plot_type, fig in figures.items():
-                        plot_path = Path(
-                                f'{path}/{technique}/{plot_type}'
-                                )
+                        plot_path = Path(f"{path}/{technique}/{plot_type}")
                         plot_path.mkdir(parents=True, exist_ok=True)
                         if isinstance(filetype, str):
                             fig.savefig(
-                                plot_path /
-                                f'{scaling_method} {vars}.{filetype}'
+                                plot_path
+                                / f"{scaling_method} {vars}.{filetype}"
                             )
                         elif isinstance(filetype, Iterable):
                             for ftype in filetype:
                                 fig.savefig(
-                                    plot_path /
-                                    f'{scaling_method} {vars}.{ftype}'
+                                    plot_path
+                                    / f"{scaling_method} {vars}.{ftype}"
                                 )
                         plt.close(fig)
 
@@ -309,14 +301,13 @@ def ecdf(data: pd.Series):
 
 
 def lin_reg_plot(
-        x: pd.Series,
-        y: pd.Series,
-        x_name: str,
-        y_name: str,
-        title: Optional[str] = None
-        ):
-    """
-    """
+    x: pd.Series,
+    y: pd.Series,
+    x_name: str,
+    y_name: str,
+    title: Optional[str] = None,
+):
+    """ """
     fig = plt.figure(figsize=(4, 4), dpi=200)
     fig_gs = fig.add_gridspec(
         2,
@@ -343,7 +334,7 @@ def lin_reg_plot(
     scatter_ax.set_ylim(min_value - 3, max_value + 3)
     scatter_ax.set_xlabel(x_name)
     scatter_ax.set_ylabel(y_name)
-    scatter_ax.scatter(x, y, color="C0", marker='.', alpha=0.75)
+    scatter_ax.scatter(x, y, color="C0", marker=".", alpha=0.75)
 
     binwidth = 7.5
     xymax = max(np.max(np.abs(x)), np.max(np.abs(y)))
@@ -358,13 +349,9 @@ def lin_reg_plot(
 
 
 def bland_altman_plot(
-        x: pd.DataFrame,
-        y: pd.Series,
-        title: Optional[str] = None,
-        **kwargs
-        ):
-    """
-    """
+    x: pd.DataFrame, y: pd.Series, title: Optional[str] = None, **kwargs
+):
+    """ """
     fig, ax = plt.subplots(figsize=(4, 4), dpi=200)
     x_data = np.mean(np.vstack((x, y)).T, axis=1)
     y_data = np.array(x) - np.array(y)
@@ -386,9 +373,7 @@ def bland_altman_plot(
         verticalalignment="bottom",
         horizontalalignment="right",
     )
-    ax.axline(
-        (0, y_mean + y_sd), (1, y_mean + y_sd), color="xkcd:fresh green"
-    )
+    ax.axline((0, y_mean + y_sd), (1, y_mean + y_sd), color="xkcd:fresh green")
     ax.text(
         max(x_data),
         y_mean + y_sd + text_adjust,
@@ -396,9 +381,7 @@ def bland_altman_plot(
         verticalalignment="bottom",
         horizontalalignment="right",
     )
-    ax.axline(
-        (0, y_mean - y_sd), (1, y_mean - y_sd), color="xkcd:fresh green"
-    )
+    ax.axline((0, y_mean - y_sd), (1, y_mean - y_sd), color="xkcd:fresh green")
     ax.text(
         max(x_data),
         y_mean - y_sd + text_adjust,
@@ -412,14 +395,13 @@ def bland_altman_plot(
 
 
 def ecdf_plot(
-        x: pd.DataFrame,
-        y: pd.Series,
-        x_name: str,
-        y_name: str,
-        title: Optional[str] = None
-        ):
-    """
-    """
+    x: pd.DataFrame,
+    y: pd.Series,
+    x_name: str,
+    y_name: str,
+    title: Optional[str] = None,
+):
+    """ """
     fig, ax = plt.subplots(figsize=(4, 4), dpi=200)
     true_x, true_y = ecdf(y)
     pred_x, pred_y = ecdf(x)
@@ -442,84 +424,74 @@ def ecdf_plot(
 
 
 def shap_plot(shaps: pd.DataFrame, x: pd.DataFrame):
-    """
-    """
-    shaps_min = shaps.drop(['Fold'], axis=1).min(axis=None)
-    shaps_max = shaps.drop(['Fold'], axis=1).max(axis=None)
+    """ """
+    shaps_min = shaps.drop(["Fold"], axis=1).min(axis=None)
+    shaps_max = shaps.drop(["Fold"], axis=1).max(axis=None)
     shaps_range = shaps_max - shaps_min
     shaps_lims = (
         shaps_min - (shaps_range * 0.1),
-        shaps_max + (shaps_range * 0.1)
+        shaps_max + (shaps_range * 0.1),
     )
 
-    num_of_cols = shaps.drop(['Fold'], axis=1).shape[1]
+    num_of_cols = shaps.drop(["Fold"], axis=1).shape[1]
 
     shape_of_scatters = (
         int(np.ceil(num_of_cols / 2)),
-        (min(2, int(num_of_cols)))
+        (min(2, int(num_of_cols))),
     )
 
     fig, ax = plt.subplots(
         *shape_of_scatters,
-        figsize=(
-           4 * shape_of_scatters[0],
-           4 * shape_of_scatters[1]
-        ),
-        dpi=200
+        figsize=(4 * shape_of_scatters[0], 4 * shape_of_scatters[1]),
+        dpi=200,
     )
 
-    for col_ind, col in enumerate(shaps.drop(['Fold'], axis=1).columns):
+    for col_ind, col in enumerate(shaps.drop(["Fold"], axis=1).columns):
         scatter_data = pd.concat(
             [
-                x.loc[:, col].rename('Value'),
-                shaps.loc[:, col].rename('Shap'),
-                shaps.loc[:, 'Fold'].rename('Fold')
+                x.loc[:, col].rename("Value"),
+                shaps.loc[:, col].rename("Shap"),
+                shaps.loc[:, "Fold"].rename("Fold"),
             ],
-            axis=1
+            axis=1,
         )
-        x_min = scatter_data.loc[:, 'Value'].min()
-        x_max = scatter_data.loc[:, 'Value'].max()
+        x_min = scatter_data.loc[:, "Value"].min()
+        x_max = scatter_data.loc[:, "Value"].max()
         x_range = x_max - x_min
         x_lims = (x_min - (x_range * 0.1), x_max + (x_range * 0.1))
 
         row_num = int(np.floor(col_ind / 2))
         col_num = col_ind % 2
-        for i, fold in enumerate(sorted(shaps.loc[:, 'Fold'].unique())):
-            scat_fold = scatter_data[scatter_data.loc[:, 'Fold'] == fold]
+        for i, fold in enumerate(sorted(shaps.loc[:, "Fold"].unique())):
+            scat_fold = scatter_data[scatter_data.loc[:, "Fold"] == fold]
             ax[row_num, col_num].scatter(
-                scat_fold['Value'],
-                scat_fold['Shap'],
-                c=f'C{i}',
-                label=f'Fold {fold}',
-                marker='.'
+                scat_fold["Value"],
+                scat_fold["Shap"],
+                c=f"C{i}",
+                label=f"Fold {fold}",
+                marker=".",
             )
         ax[row_num, col_num].set_title(col)
-        ax[row_num, col_num].set_xlabel('Value')
+        ax[row_num, col_num].set_xlabel("Value")
         ax[row_num, col_num].set_xlim(x_lims)
-        ax[row_num, col_num].set_ylabel('Shap')
+        ax[row_num, col_num].set_ylabel("Shap")
         ax[row_num, col_num].set_ylim(shaps_lims)
 
-    ax[0, 0].legend(loc='best')
+    ax[0, 0].legend(loc="best")
     plt.tight_layout()
     return fig
 
 
-def get_shap(
-        x: pd.DataFrame,
-        y: pd.DataFrame,
-        pipeline: dict[int, Pipeline]
-        ):
+def get_shap(x: pd.DataFrame, y: pd.DataFrame, pipeline: dict[int, Pipeline]):
     shaps = pd.DataFrame()
     for fold in pipeline.keys():
         if len(pipeline.keys()) > 1:
-            fold_index = y[y.loc[:, 'Fold'] == fold].index
+            fold_index = y[y.loc[:, "Fold"] == fold].index
             x_data = x.loc[fold_index, :]
         else:
             x_data = x
         explainer = shap.KernelExplainer(
-            model=pipeline[fold][-1].predict,
-            data=x_data,
-            link='identity'
+            model=pipeline[fold][-1].predict, data=x_data, link="identity"
         )
         shaps = pd.concat(
             [
@@ -527,13 +499,13 @@ def get_shap(
                 pd.DataFrame(
                     explainer.shap_values(x_data),
                     index=x_data.index,
-                    columns=x_data.columns
-                )
+                    columns=x_data.columns,
+                ),
             ]
         )
         if len(pipeline.keys()) > 1:
-            shaps.loc[x_data.index, 'Fold'] = y.loc[x_data.index, 'Fold']
+            shaps.loc[x_data.index, "Fold"] = y.loc[x_data.index, "Fold"]
         else:
-            shaps.loc[:, 'Fold'] = 'Cross-Validated'
+            shaps.loc[:, "Fold"] = "Cross-Validated"
         shaps = shaps.sort_index()
     return shaps

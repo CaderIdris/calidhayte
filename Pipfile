@@ -22,6 +22,7 @@ pdoc = "*"
 pytest-cov = "*"
 pytest-html = "*"
 jupyter = "*"
+black = "*"
 
 [requires]
 python_version = "3.11"
