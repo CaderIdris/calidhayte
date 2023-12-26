@@ -73,12 +73,12 @@ def test_prepare_datasets(trained_models):
         err(results)
 
     res = results.return_errors()
-    tests["Correct num of techniques"] = res.nunique()["Technique"] == 3
+    tests["Correct num of techniques"] = res.nunique()["Technique"] == 4
     tests["Correct num of vars"] = res.nunique()["Variables"] == 8
     tests["Correct num of folds"] = res.nunique()["Fold"] == 6
     print(res.index.to_frame().nunique())
 
-    tests["Correct num of rows"] = res.shape[0] == 3 * 8 * 6
+    tests["Correct num of rows"] = res.shape[0] == (3 * 8 * 6) + 1
 
     tests["Correct num of cols"] = res.shape[1] == 20
 
