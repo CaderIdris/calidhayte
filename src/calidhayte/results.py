@@ -208,6 +208,25 @@ class Results:
     def _sklearn_error_meta(self, err: Any, name: str, **kwargs):
         """ """
         idx = self.cached_error_length
+        for fold in self.y.loc[:, "Fold"].unique():
+            true = self.y.loc[:, self.target][
+                self.y.loc[:, "Fold"] == fold
+            ]
+            pred_raw = self.x.loc[
+                true.index, self.target
+            ]
+            predicted = pred_raw.dropna()
+            error = err(
+                true[predicted.index], predicted, **kwargs
+            )
+            if idx not in self.errors.index:
+                self.errors.loc[idx, "Technique"] = "None"
+                self.errors.loc[
+                    idx, "Scaling Method"
+                ] = "None"
+                self.errors.loc[idx, "Variables"] = self.target
+                self.errors.loc[idx, "Fold"] = fold
+                self.errors.loc[idx, "Count"] = true[predicted.index].shape[0]
         true = self.y.loc[:, self.target][
             self.y.loc[:, "Fold"] == "Validation"
         ]
@@ -273,6 +292,7 @@ class Results:
                             for arg in exc.args:
                                 logger.warning(arg)
                             error = np.nan
+                            predicted = pd.Series()
 
                         if idx not in self.errors.index:
                             self.errors.loc[idx, "Technique"] = technique
@@ -281,7 +301,7 @@ class Results:
                             ] = scaling_technique
                             self.errors.loc[idx, "Variables"] = vars
                             self.errors.loc[idx, "Fold"] = fold
-                            self.errors.loc[idx, "Count"] = true.shape[0]
+                            self.errors.loc[idx, "Count"] = true[predicted.index].shape[0]
                         self.errors.loc[idx, name] = error
                         idx = idx + 1
                     if idx not in self.errors.index:
@@ -291,6 +311,7 @@ class Results:
                         ] = scaling_technique
                         self.errors.loc[idx, "Variables"] = vars
                         self.errors.loc[idx, "Fold"] = "All"
+                        self.errors.loc[idx, "Count"] = true.shape[0]
                     predicted = (
                         self.pred_vals[technique][scaling_technique][vars]
                         .mean(axis=1)
