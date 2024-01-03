@@ -543,7 +543,9 @@ class Calibrate:
                 for fold in self.y_data.loc[:, "Fold"].unique():
                     if fold == "Validation":
                         continue
-                    y_data = self.y_data[self.y_data.loc[:, "Fold"] != fold]
+                    y_data = self.y_data[
+                        ~self.y_data.loc[:, "Fold"].isin([fold, "Validation"])
+                    ]
                     if reg in ["t", "gaussian"]:
                         # If using PyMC bayesian model,
                         # then store result in pipeline
