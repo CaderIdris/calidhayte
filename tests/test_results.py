@@ -30,7 +30,7 @@ def trained_models():
         + (["Validation"] * 50)
     )
 
-    cal = Calibrate(x_df, y_df, target="x")
+    cal = Calibrate(x_df, y_df, target="x", all_sec_vals=True)
     cal.linreg()
     cal.theil_sen()
     cal.random_forest()

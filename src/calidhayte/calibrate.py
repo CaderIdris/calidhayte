@@ -1,6 +1,5 @@
 """ Contains code used to perform a range of univariate and multivariate
 regressions on provided data.
->>>>>>> more_cals
 
 Acts as a wrapper for scikit-learn [^skl], XGBoost [^xgb] and PyMC (via Bambi)
 [^pmc]
@@ -51,6 +50,8 @@ def cont_strat_folds(
 ) -> pd.DataFrame:
     """
     Creates stratified k-folds on continuous variable
+
+    Parameters
     ----------
     df : pd.DataFrame
         Target data to stratify on.
@@ -210,6 +211,7 @@ class Calibrate:
         x_data: pd.DataFrame,
         y_data: pd.DataFrame,
         target: str,
+        all_sec_vals: bool = False,
         folds: int = 5,
         strat_groups: int = 10,
         scaler: Union[
@@ -258,6 +260,8 @@ class Calibrate:
         target : str
             Column name of the primary feature to use in calibration, must be
             the name of a column in both `x_data` and `y_data`.
+        all_sec_vals : bool, default=False
+            Iterate over all secondary variable combinations or just all/none
         folds : int, default=5
             Number of folds to split the data into, using stratified k-fold.
         strat_groups : int, default=10
@@ -455,6 +459,14 @@ class Calibrate:
         Number of processor cores to use
         """
         self.pkl = pickle_path
+        """
+        Path to save pickle files to, or None if pipelines are stored in memory
+        """
+        self.all_sec_vals = all_sec_vals
+        """
+        Whether to test all combinations of secondary variables or just
+        all/none
+        """
 
     def _sklearn_regression_meta(
         self,
@@ -494,8 +506,11 @@ class Calibrate:
         x_secondary_cols = self.x_data.drop(self.target, axis=1).columns
         # All columns in x_data that aren't the target variable
         if len(x_secondary_cols) > 0:
-            products = [[np.nan, col] for col in x_secondary_cols]
-            secondary_vals = pd.MultiIndex.from_product(products)
+            if self.all_sec_vals:
+                products = [[np.nan, col] for col in x_secondary_cols]
+                secondary_vals = pd.MultiIndex.from_product(products)
+            else:
+                secondary_vals = [None, list(x_secondary_cols)]
         else:
             secondary_vals = [None]
         # Get all possible combinations of secondary variables in a pandas
