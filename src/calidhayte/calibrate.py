@@ -11,6 +11,7 @@ Acts as a wrapper for scikit-learn [^skl], XGBoost [^xgb] and PyMC (via Bambi)
 
 from collections.abc import Iterable
 from copy import deepcopy as dc
+import logging
 from pathlib import Path
 import pickle
 import sys
@@ -39,6 +40,7 @@ from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
 import xgboost as xgb
 
+logger = logging.getLogger(f"__main__.{__name__}")
 
 def cont_strat_folds(
     df: pd.DataFrame,
@@ -561,6 +563,9 @@ class Calibrate:
                     y_data = self.y_data[
                         ~self.y_data.loc[:, "Fold"].isin([fold, "Validation"])
                     ]
+                    logging.debug(
+                        "%s, %s, %s and %s", name, scaler, sec_vals, fold
+                    )
                     if reg in ["t", "gaussian"]:
                         # If using PyMC bayesian model,
                         # then store result in pipeline
