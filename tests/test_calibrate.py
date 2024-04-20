@@ -41,7 +41,7 @@ def test_data_split(full_data, folds):
     tests = dict()
     print(full_data["x"])
     print(full_data["y"])
-    coeff_inst = Calibrate(
+    coeff_inst = Calibrate.setup(
         x_data=full_data["x"], y_data=full_data["y"], target="x", folds=folds
     )
     split_coeffs = coeff_inst.return_measurements()["y"]
@@ -62,9 +62,11 @@ def test_data_split(full_data, folds):
     assert all(tests.values())
 
 
-@pytest.mark.cal
-@pytest.mark.parametrize("rsearch", [False])  # , True])
-def test_skl_cals(full_data, rsearch):
+@pytest.mark.cal()
+@pytest.mark.parametrize(
+    ("polynomial_degree", "vif_bound"), [(1, None), (2, 5)]
+)
+def test_skl_cals(full_data, polynomial_degree, vif_bound):
     """
     Combines all possible multivariate key combos with each skl calibration
     method except omp which needs at least 1 mv key
@@ -104,15 +106,18 @@ def test_skl_cals(full_data, rsearch):
         Calibrate.xgboost,
         Calibrate.xgboost_rf,
         Calibrate.linear_gam,
-        Calibrate.expectile_gam
-        # Calibrate.pymc_bayesian
+        Calibrate.expectile_gam,
     ]
-    coeff_inst = Calibrate(
-        x_data=full_data["x"], y_data=full_data["y"], target="x"
+    coeff_inst = Calibrate.setup(
+        x_data=full_data["x"],
+        y_data=full_data["y"],
+        target="x",
+        interaction_degree=polynomial_degree,
+        vif_bound=vif_bound,
     )
     for func in funcs:
         print(func)
-        func(coeff_inst, random_search=rsearch)
+        func(coeff_inst)
     models = coeff_inst.return_models()
     tests["Correct number of techniques"] = len(models.keys()) == len(funcs)
     for technique, scaling_methods in models.items():
@@ -148,6 +153,7 @@ def test_skl_cals(full_data, rsearch):
                     )
 
                 for fold, pipe in folds.items():
+                    print(pipe[:-1].get_feature_names_out())
                     _ = pipe.predict(full_data["z"])
                     tests[
                         f"Pipe for {technique} {vars} {fold} works"

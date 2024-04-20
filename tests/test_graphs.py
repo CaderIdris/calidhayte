@@ -20,7 +20,7 @@ def trained_models():
         ([0] * 60) + ([1] * 60) + ([2] * 60) + ([3] * 60) + ([4] * 60)
     )
 
-    cal = Calibrate(
+    cal = Calibrate.setup(
         x_df, y_df, target="x", scaler=["None", "Yeo-Johnson Transform"]
     )
     cal.linreg()

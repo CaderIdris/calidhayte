@@ -30,7 +30,7 @@ def trained_models():
         + (["Validation"] * 50)
     )
 
-    cal = Calibrate(x_df, y_df, target="x", all_sec_vals=True)
+    cal = Calibrate.setup(x_df, y_df, target="x")
     cal.linreg()
     cal.theil_sen()
     cal.random_forest()
@@ -74,11 +74,11 @@ def test_prepare_datasets(trained_models):
 
     res = results.return_errors()
     tests["Correct num of techniques"] = res.nunique()["Technique"] == 4
-    tests["Correct num of vars"] = res.nunique()["Variables"] == 8
+    tests["Correct num of vars"] = res.nunique()["Variables"] == 2
     tests["Correct num of folds"] = res.nunique()["Fold"] == 6
     print(res.index.to_frame().nunique())
 
-    tests["Correct num of rows"] = res.shape[0] == (3 * 8 * 6) + 1
+    tests["Correct num of rows"] = res.shape[0] == (3 * 2 * 6) + 1
 
     tests["Correct num of cols"] = res.shape[1] == 20
 

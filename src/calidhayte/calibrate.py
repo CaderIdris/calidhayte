@@ -1,5 +1,4 @@
-""" Contains code used to perform a range of univariate and multivariate
-regressions on provided data.
+"""Perform multiple regressions on dataframes.
 
 Acts as a wrapper for scikit-learn [^skl], XGBoost [^xgb] and PyMC (via Bambi)
 [^pmc]
@@ -15,11 +14,23 @@ import logging
 from pathlib import Path
 import pickle
 import sys
-from typing import Any, List, Literal, Optional, Union
-import warnings
+from typing import (
+    ClassVar,
+    List,
+    Literal,
+    Optional,
+    TypeVar,
+    Type,
+    TypeAlias,
+    Union,
+)
+
+try:
+    from typing import Self
+except ImportError:
+    from typing_extensions import Self
 
 # import bambi as bmb
-import numpy as np
 import pandas as pd
 from pygam import GAM, LinearGAM, ExpectileGAM
 import scipy
@@ -32,103 +43,117 @@ from sklearn import linear_model as lm
 from sklearn import neural_network as nn
 from sklearn import svm
 from sklearn import tree
+from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.gaussian_process import kernels as kern
 import sklearn.preprocessing as pre
 from sklearn.model_selection import StratifiedKFold, RandomizedSearchCV
 from sklearn.model_selection import train_test_split
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
+from statsmodels.stats.outliers_influence import variance_inflation_factor
 import xgboost as xgb
 
 logger = logging.getLogger(f"__main__.{__name__}")
 
-def cont_strat_folds(
-    df: pd.DataFrame,
-    target_var: str,
-    splits: int = 5,
-    strat_groups: int = 5,
-    validation_size: float = 0.1,
-    seed: int = 62,
-) -> pd.DataFrame:
-    """
-    Creates stratified k-folds on continuous variable
+ScalingOptions: TypeAlias = Union[
+    Iterable[
+        Literal[
+            "None",
+            "Standard Scale",
+            "MinMax Scale",
+            "Yeo-Johnson Transform",
+            "Box-Cox Transform",
+            "Quantile Transform (Uniform)",
+            "Quantile Transform (Gaussian)",
+        ]
+    ],
+    Literal[
+        "All",
+        "None",
+        "Standard Scale",
+        "MinMax Scale",
+        "Yeo-Johnson Transform",
+        "Box-Cox Transform",
+        "Quantile Transform (Uniform)",
+        "Quantile Transform (Gaussian)",
+    ],
+]
 
-    Parameters
-    ----------
-    df : pd.DataFrame
-        Target data to stratify on.
-    target_var : str
-        Target feature name.
-    splits : int, default=5
-        Number of folds to make.
-    strat_groups : int, default=10
-        Number of groups to split data in to for stratification.
-    validation_size : float, default = 0.1
-        Size of measurements to keep aside for validation
-    seed : int, default=62
-        Random state to use.
+CalibrateType = TypeVar("CalibrateType", bound="Calibrate")
 
-    Returns
-    -------
-    pd.DataFrame
-        `y_df` with added 'Fold' column, specifying which test data fold
-        variable corresponds to.
 
-    Examples
-    --------
-    >>> df = pd.read_csv('data.csv')
-    >>> df
-    |    | x | a | b |
-    |    |   |   |   |
-    |  0 |2.3|1.8|7.2|
-    |  1 |3.2|9.6|4.5|
-    |....|...|...|...|
-    |1000|2.3|4.5|2.2|
-    >>> df_with_folds = const_strat_folds(
-            df=df,
-            target='a',
-            splits=3,
-            strat_groups=3.
-            seed=78
+class VIF(BaseEstimator, TransformerMixin):
+    """ """
+
+    def __init__(self: Self, target: str, bound: float) -> None:
+        self.target: str = target
+        self.bound: float = bound
+        self.columns_to_drop: list[str] = []
+        self.features: list[str] = []
+
+    def fit(self: Self, x: pd.DataFrame, y: None = None) -> Self:
+        """ """
+        for _ in range(x.shape[1] - 2):
+            x_new = x.copy(deep=True).drop(
+                columns=[self.target, *self.columns_to_drop]
+            )
+            vif_data = pd.Series()
+            for i, col in enumerate(x_new.columns):
+                vif_data[col] = variance_inflation_factor(x_new.values, i)
+            if not (vif_data > self.bound).any():
+                break
+            largest = str(vif_data.idxmax())
+            self.columns_to_drop.append(largest)
+        self.features = list(
+            x.copy().drop(columns=self.columns_to_drop).columns
         )
-    >>> df_with_folds
-    |    | x | a | b |Fold|
-    |    |   |   |   |    |
-    |  0 |2.3|1.8|7.2| 2  |
-    |  1 |3.2|9.6|4.5| 1  |
-    |....|...|...|...|....|
-    |1000|2.3|4.5|2.2| 0  |
+        return self
 
-    All folds should have a roughly equal distribution of values for 'a'
+    def transform(self: Self, x: pd.DataFrame, y: None = None) -> pd.DataFrame:
+        """ """
+        return x.copy().drop(columns=self.columns_to_drop)
 
-    """
-    _df = df.copy()
-    _df["Fold"] = "Validation"
-    skf = StratifiedKFold(n_splits=splits, random_state=seed, shuffle=True)
-    _df["Group"] = pd.qcut(_df.loc[:, target_var], strat_groups, labels=False)
+    def get_feature_names_out(
+        self: Self, input_features: list[str]
+    ) -> list[str]:
+        """ """
+        return self.features
 
-    group_label = _df.loc[:, "Group"]
 
-    train_set, val_set = train_test_split(
-        _df,
-        test_size=validation_size,
-        random_state=seed,
-        shuffle=True,
-        stratify=group_label,
-    )
+class PolynomialPandas(BaseEstimator, TransformerMixin):
+    """ """
 
-    group_label = train_set.loc[:, "Group"]
+    def __init__(self: Self, degree: int) -> None:
+        self.degree = degree
+        self.estimator = pre.PolynomialFeatures(
+            degree=degree, include_bias=False
+        )
 
-    for fold_number, (_, v) in enumerate(skf.split(group_label, group_label)):
-        _temp_df = train_set.iloc[v, :]
-        _temp_df.loc[:, "Fold"] = fold_number
-        train_set.iloc[v, :] = _temp_df
-    return pd.concat([train_set, val_set]).sort_index().drop("Group", axis=1)
+    def fit(self: Self, x: pd.DataFrame, y: None = None) -> Self:
+        """ """
+        self.estimator.fit(x)
+        return self
+
+    def transform(self: Self, x: pd.DataFrame, y: None = None) -> pd.DataFrame:
+        """ """
+        transformed_array = self.estimator.transform(x)
+        return pd.DataFrame(
+            transformed_array,
+            index=x.index,
+            columns=self.estimator.get_feature_names_out(),
+        )
+
+    def get_feature_names_out(
+        self: Self, input_features: list[str]
+    ) -> list[str]:
+        """ """
+        return list(self.estimator.get_feature_names_out())
 
 
 class Calibrate:
-    """
-    Calibrate x against y using a range of different methods provided by
+    """Calibrate x against y.
+
+    Calibrate using a range of different methods provided by
     scikit-learn[^skl], xgboost[^xgb] and PyMC (via Bambi)[^pmc].
 
     [^skl]: https://scikit-learn.org/stable/modules/classes.html
@@ -156,7 +181,7 @@ class Calibrate:
     |...|...|
     |100|9.5|
     >>>
-    >>> calibration = Calibrate(
+    >>> calibration = Calibrate.setup(
         x_data=x,
         y_data=y,
         target='a',
@@ -205,53 +230,44 @@ class Calibrate:
     | 1 |9.1|
     |...|...|
     |100|6.7|
-
     """
 
-    def __init__(
-        self,
+    scaler_list: ClassVar = {
+        "None": None,
+        "Standard Scale": pre.StandardScaler(),
+        "MinMax Scale": pre.MinMaxScaler(),
+        "Yeo-Johnson Transform": pre.PowerTransformer(method="yeo-johnson"),
+        "Box-Cox Transform": pre.PowerTransformer(method="box-cox"),
+        "Quantile Transform (Uniform)": pre.QuantileTransformer(
+            output_distribution="uniform"
+        ),
+        "Quantile Transform (Gaussian)": pre.QuantileTransformer(
+            output_distribution="normal"
+        ),
+    }
+    """
+    Keys for scaling algorithms available in the pipelines
+    """
+
+    @classmethod
+    def setup(
+        cls: Type[CalibrateType],
         x_data: pd.DataFrame,
         y_data: pd.DataFrame,
         target: str,
-        all_sec_vals: bool = False,
-        folds: int = 5,
-        strat_groups: int = 10,
-        scaler: Union[
-            Iterable[
-                Literal[
-                    "None",
-                    "Standard Scale",
-                    "MinMax Scale",
-                    "Yeo-Johnson Transform",
-                    "Box-Cox Transform",
-                    "Quantile Transform (Uniform)",
-                    "Quantile Transform (Gaussian)",
-                ]
-            ],
-            Literal[
-                "All",
-                "None",
-                "Standard Scale",
-                "MinMax Scale",
-                "Yeo-Johnson Transform",
-                "Box-Cox Transform",
-                "Quantile Transform (Uniform)",
-                "Quantile Transform (Gaussian)",
-            ],
-        ] = "None",
-        random_search_iterations: int = 25,
-        validation_size: float = 0.1,
-        verbosity: int = 0,
-        n_jobs: int = -1,
+        scaler: ScalingOptions = "None",
+        interaction_degree: int = 0,
+        vif_bound: Optional[float] = None,
         pickle_path: Optional[Path] = None,
+        folds: int = 5,
+        validation_size: float = 0.1,
+        strat_groups: int = 10,
         seed: int = 62,
-    ):
-        """Initialises class
-
-        Used to compare one set of measurements against another.
-        It can perform both univariate and multivariate regression, though
-        some techniques can only do one or the other. Multivariate regression
-        can only be performed when secondary variables are provided.
+        random_search_iterations: int = 25,
+        n_jobs: int = -1,
+        verbosity: int = 0,
+    ) -> CalibrateType:
+        """Set up class with all required parameters, performs type checking.
 
         Parameters
         ----------
@@ -262,36 +278,33 @@ class Calibrate:
         target : str
             Column name of the primary feature to use in calibration, must be
             the name of a column in both `x_data` and `y_data`.
-        all_sec_vals : bool, default=False
-            Iterate over all secondary variable combinations or just all/none
+        scaler : ScalingOptions, default='None'
+            The scaling/transform method (or list of methods) to apply to the
+            data
+        interaction_degree : int, default=0
+            Polynomial degree for interaction variables
+        vif_bound : float, optional, default=None
+            Bound for vif dimensional reduction, any feature with a vif above
+            the set value will be discarded
+        pickle_path : Path, optional, default=None
+            Where to save trained estimators as pickle files, will not save if
+            path not provided
         folds : int, default=5
             Number of folds to split the data into, using stratified k-fold.
+        validation_size : float, default=0.1
+            Proportion of data to use as validation set
         strat_groups : int, default=10
             Number of groups to stratify against, the data will be split into
             n equally sized bins where n is the value of `strat_groups`.
-        scaler : iterable of {<br>\
-            'None',<br>\
-            'Standard Scale',<br>\
-            'MinMax Scale',<br>\
-            'Yeo-Johnson Transform',<br>\
-            'Box-Cox Transform',<br>\
-            'Quantile Transform (Uniform)',<br>\
-            'Quantile Transform (Gaussian)',<br>\
-            } or {<br>\
-            'All',<br>\
-            'None',<br>\
-            'Standard Scale',<br>\
-            'MinMax Scale',<br>\
-            'Yeo-Johnson Transform',<br>\
-            'Box-Cox Transform',<br>\
-            'Quantile Transform (Uniform)',<br>\
-            'Quantile Transform (Gaussian)',<br>\
-            }, default='None'
-            The scaling/transform method (or list of methods) to apply to the
-            data
         seed : int, default=62
             Random state to use when shuffling and splitting the data into n
             folds. Ensures repeatability.
+        random_search_iterations : int, default=25
+            Number of iterations in random search
+        n_jobs : int, default=-1
+            Number of jobs to run in random search
+        verbosity : int, default=0
+            Verbosity of random search output
 
         Raises
         ------
@@ -301,48 +314,15 @@ class Calibrate:
             Raised if `scaler` is not str, tuple or list
         """
         if target not in x_data.columns or target not in y_data.columns:
-            raise ValueError(f"{target} does not exist in both columns.")
+            error_string = f"{target} does not exist in both columns."
+            raise ValueError(error_string)
         join_index = (
             x_data.join(y_data, how="inner", lsuffix="x", rsuffix="y")
             .dropna()
             .index
         )
-        """
-        The common indices between `x_data` and `y_data`, excluding missing
-        values
-        """
-        self.x_data: pd.DataFrame = x_data.loc[join_index, :]
-        """
-        The data to be calibrated.
-        """
-        self.target: str = target
-        """
-        The name of the column in both `x_data` and `y_data` that
-        will be used as the x and y variables in the calibration.
-        """
-        self.scaler_list: dict[str, Any] = {
-            "None": None,
-            "Standard Scale": pre.StandardScaler(),
-            "MinMax Scale": pre.MinMaxScaler(),
-            "Yeo-Johnson Transform": pre.PowerTransformer(
-                method="yeo-johnson"
-            ),
-            "Box-Cox Transform": pre.PowerTransformer(method="box-cox"),
-            "Quantile Transform (Uniform)": pre.QuantileTransformer(
-                output_distribution="uniform"
-            ),
-            "Quantile Transform (Gaussian)": pre.QuantileTransformer(
-                output_distribution="normal"
-            ),
-        }
-        """
-        Keys for scaling algorithms available in the pipelines
-        """
-        self.scaler: list[str] = list()
-        """
-        The scaling algorithm(s) to preprocess the data with
-        """
-        self.y_data = cont_strat_folds(
+        x_data_filtered: pd.DataFrame = x_data.loc[join_index, :]
+        y_data_filtered = cls.cont_strat_folds(
             y_data.loc[join_index, :],
             target,
             folds,
@@ -350,6 +330,51 @@ class Calibrate:
             validation_size,
             seed,
         )
+        scaler_list = cls.configure_scalers(
+            scaler, x_data=x_data_filtered, y_data=y_data_filtered
+        )
+        return cls(
+            x_data=x_data_filtered,
+            y_data=y_data_filtered,
+            target=target,
+            scalers=scaler_list,
+            interaction_degree=interaction_degree,
+            vif_bound=vif_bound,
+            pickle_path=pickle_path,
+            seed=seed,
+            folds=folds,
+            random_search_iterations=random_search_iterations,
+            n_jobs=n_jobs,
+            verbosity=verbosity,
+        )
+
+    def __init__(
+        self: Self,
+        x_data: pd.DataFrame,
+        y_data: pd.DataFrame,
+        target: str,
+        scalers: list[str],
+        interaction_degree: int,
+        vif_bound: Optional[float],
+        pickle_path: Optional[Path],
+        seed: int,
+        folds: int,
+        random_search_iterations: int,
+        n_jobs: int,
+        verbosity: int,
+    ) -> None:
+        """Initialise class.
+
+        Used to compare one set of measurements against another.
+        It can perform both univariate and multivariate regression, though
+        some techniques can only do one or the other. Multivariate regression
+        can only be performed when secondary variables are provided.
+        """
+        self.x_data: pd.DataFrame = x_data
+        """
+        The data to be calibrated.
+        """
+        self.y_data = y_data
         """
         The data that `x_data` will be calibrated against. A '*Fold*'
         column is added using the `const_strat_folds` function which splits
@@ -359,55 +384,33 @@ class Calibrate:
         across all folds. This significantly reduces the chances of one fold
         containing a skewed distribution relative to the whole dataset.
         """
-        if isinstance(scaler, str):
-            if scaler == "All":
-                if bool(self.x_data.le(0).any(axis=None)) or bool(
-                    self.y_data.drop("Fold", axis=1).le(0).any(axis=None)
-                ):
-                    self.scaler_list.pop("Box-Cox Transform")
-                    warnings.warn(
-                        "WARN: "
-                        "Box-Cox is not compatible with provided measurements"
-                    )
-                self.scaler.extend(self.scaler_list.keys())
-            elif scaler in self.scaler_list.keys():
-                self.scaler.append(scaler)
-            else:
-                self.scaler.append("None")
-                warnings.warn(f"Scaling algorithm {scaler} not recognised")
-        elif isinstance(scaler, (tuple, list)):
-            for sc in scaler:
-                if sc == "Box-Cox Transform" and not any(
-                    (
-                        bool(self.x_data.lt(0).any(axis=None)),
-                        bool(self.y_data.lt(0).any(axis=None)),
-                    )
-                ):
-                    warnings.warn(
-                        "Box-Cox is not compatible with provided measurements"
-                    )
-                    continue
-                if sc in self.scaler_list.keys():
-                    self.scaler.append(sc)
-                else:
-                    warnings.warn(f"Scaling algorithm {sc} not recognised")
-        else:
-            raise ValueError(
-                "scaler parameter should be string, list or tuple"
-            )
-        if not self.scaler:
-            warnings.warn(
-                "No valid scaling algorithms provided, defaulting to None"
-            )
-            self.scaler.append("None")
-
+        self.target: str = target
+        """
+        The name of the column in both `x_data` and `y_data` that
+        will be used as the x and y variables in the calibration.
+        """
+        self.scaler: list[str] = scalers
+        """
+        The scaling algorithm(s) to preprocess the data with
+        """
+        self.interaction_degree: int = interaction_degree
+        """
+        The polynomial degree for interaction variables, will disable
+        polynomial features if less than 2
+        """
+        self.vif_bound: Optional[float] = vif_bound
+        """
+        Bound to use for VIF dimensional reduction, VIF not used if None
+        """
         self.models: dict[
             str,  # Technique name
             dict[
                 str,  # Scaling technique
-                dict[str, dict[int, Pipeline]],  # Variable combo  # Fold
+                dict[
+                    str, dict[int, Union[Pipeline, Path]]
+                ],  # Variable combo  # Fold
             ],
-        ] = dict()
+        ] = {}
         """
         The calibrated models. They are stored in a nested structure as
         follows:
@@ -442,11 +445,6 @@ class Calibrate:
                 }
               }
         ```
-
-        """
-        self.folds: int = folds
-        """
-        The number of folds used in k-fold cross validation
         """
         self.rs_iter: int = random_search_iterations
         """
@@ -464,28 +462,92 @@ class Calibrate:
         """
         Path to save pickle files to, or None if pipelines are stored in memory
         """
-        self.all_sec_vals = all_sec_vals
+        self.seed: int = seed
         """
-        Whether to test all combinations of secondary variables or just
-        all/none
+        Seed to use for random number generator
         """
+        self.folds = folds
+        """
+        Number of folds
+        """
+        self.transformer_pipelines: dict[
+            str, dict[str, dict[int, Pipeline]]
+        ] = {}
+
+    def _pretrain_transformer_pipeline(self: Self) -> None:
+        """Pretrain transformers."""
+        x_secondary_cols = self.x_data.drop(self.target, axis=1).columns
+        # All columns in x_data that aren't the target variable
+        if len(x_secondary_cols) > 0:
+            secondary_vals = [None, list(x_secondary_cols)]
+        else:
+            secondary_vals = [None]
+        # Get all possible combinations of secondary variables in a pandas
+        # MultiIndex
+        for scaler in self.scaler:
+            if self.transformer_pipelines.get(scaler) is None:
+                self.transformer_pipelines[scaler] = {}
+                # If the scaling technique hasn't been used with the
+                # classification
+                # technique yet, add its key to the nested dictionary
+            for sec_vals in secondary_vals:
+                # Loop over all combinations of secondary values
+                if sec_vals is not None:
+                    vals = [self.target] + [v for v in sec_vals if v == v]
+                else:
+                    vals = [self.target]
+                vals_str = " + ".join(vals)
+                self.transformer_pipelines[scaler][vals_str] = {}
+                for fold in self.y_data.loc[:, "Fold"].unique():
+                    if fold == "Validation":
+                        continue
+                    y_data = self.y_data[
+                        ~self.y_data.loc[:, "Fold"].isin([fold, "Validation"])
+                    ]
+                    if self.interaction_degree > 1:
+                        interaction_vars = PolynomialPandas(
+                            degree=self.interaction_degree
+                        )
+                    else:
+                        interaction_vars = None
+
+                    vif = (
+                        VIF(target=self.target, bound=self.vif_bound)
+                        if self.vif_bound is not None
+                        else None
+                    )
+                    pipeline = Pipeline(
+                        [
+                            (
+                                "Selector",
+                                ColumnTransformer(
+                                    [("selector", "passthrough", vals)],
+                                    remainder="drop",
+                                    verbose_feature_names_out=False,
+                                ).set_output(transform="pandas"),
+                            ),
+                            ("Interaction Variables", interaction_vars),
+                            ("VIF", vif),
+                            ("Scaler", self.scaler_list[scaler]),
+                        ]
+                    )
+                    pipeline.fit(
+                        self.x_data.loc[y_data.index, :],
+                        y_data.loc[:, self.target],
+                    )
+                    self.transformer_pipelines[scaler][vals_str][fold] = dc(
+                        pipeline
+                    )
 
     def _sklearn_regression_meta(
-        self,
-        reg: Union[
-            skl.base.RegressorMixin,
-            RandomizedSearchCV,
-            GAM,
-            Literal["t", "gaussian"],
-        ],
+        self: Self,
+        reg: Union[skl.base.RegressorMixin, RandomizedSearchCV, GAM],
         name: str,
         min_coeffs: int = 1,
         max_coeffs: int = (sys.maxsize * 2) + 1,
-        random_search: bool = False,
-    ):
-        """
-        Metaclass, formats data and uses sklearn classifier to
-        fit x to y
+        random_search: Optional[bool] = None,
+    ) -> None:
+        """Format data and use sklearn classifier to fit x to y.
 
         Parameters
         ----------
@@ -499,178 +561,77 @@ class Calibrate:
             Maximum number of coefficients for technique.
         random_search : bool
             Whether RandomizedSearch is used or not
-
-        Raises
-        ------
-        NotImplementedError
-            PyMC currently doesn't work, TODO
         """
-        x_secondary_cols = self.x_data.drop(self.target, axis=1).columns
-        # All columns in x_data that aren't the target variable
-        if len(x_secondary_cols) > 0:
-            if self.all_sec_vals:
-                products = [[np.nan, col] for col in x_secondary_cols]
-                secondary_vals = pd.MultiIndex.from_product(products)
-            else:
-                secondary_vals = [None, list(x_secondary_cols)]
-        else:
-            secondary_vals = [None]
-        # Get all possible combinations of secondary variables in a pandas
-        # MultiIndex
+        if not self.transformer_pipelines:
+            self._pretrain_transformer_pipeline()
         if self.models.get(name) is None:
-            self.models[name] = dict()
+            self.models[name] = {}
             # If the classification technique hasn't been used yet,
             # add its key to the models dictionary
-        for scaler in self.scaler:
+        for scaler, var_pipes in self.transformer_pipelines.items():
             if self.models[name].get(scaler) is None:
-                self.models[name][scaler] = dict()
+                self.models[name][scaler] = {}
                 # If the scaling technique hasn't been used with the
                 # classification
                 # technique yet, add its key to the nested dictionary
-            for sec_vals in secondary_vals:
+            for sec_vars, fold_pipes in var_pipes.items():
                 # Loop over all combinations of secondary values
-                if sec_vals is not None:
-                    vals = [self.target] + [v for v in sec_vals if v == v]
-                else:
-                    vals = [self.target]
-                vals_str = " + ".join(vals)
+                vals = sec_vars.split(" + ")
                 if len(vals) < min_coeffs or len(vals) > max_coeffs:
                     # Skip if number of coeffs doesn't lie within acceptable
                     # range
                     # for technique. For example, isotonic regression
                     # only works with one variable
                     continue
-                self.models[name][scaler][vals_str] = dict()
-                #                if random_search:
-                #                    pipeline = Pipeline([
-                #                        ("Selector", ColumnTransformer([
-                #                       ("selector", "passthrough", vals)
-                #                            ], remainder="drop")
-                #                         ),
-                #                        ("Scaler", self.scaler_list[scaler]),
-                #                        ("Regression", reg)
-                #                        ])
-                #                    pipeline.fit(
-                #                        self.x_data,
-                #                        self.y_data.loc[:, self.target]
-                #                            )
-                #   self.models[name][scaler][vals_str][0] = dc(pipeline)
-                #                    continue
-                #
-                for fold in self.y_data.loc[:, "Fold"].unique():
-                    if fold == "Validation":
-                        continue
+                self.models[name][scaler][sec_vars] = {}
+                for fold, pretrained_pipe in fold_pipes.items():
                     y_data = self.y_data[
                         ~self.y_data.loc[:, "Fold"].isin([fold, "Validation"])
                     ]
                     logging.debug(
-                        "%s, %s, %s and %s", name, scaler, sec_vals, fold
+                        "%s, %s, %s and %s", name, scaler, sec_vars, fold
                     )
-                    if reg in ["t", "gaussian"]:
-                        # If using PyMC bayesian model,
-                        # then store result in pipeline
-                        # Currently doesn't work as PyMC models
-                        # can't be pickled, so don't function with deepcopy.
-                        # Needs looking into
-                        raise NotImplementedError(
-                            "PyMC functions currently don't work with deepcopy"
+
+                    transformed_data = pretrained_pipe.transform(
+                        self.x_data.loc[y_data.index, :]
+                    )
+                    pipeline = dc(pretrained_pipe)
+                    if (transformed_data.shape[1] < min_coeffs) or (
+                        transformed_data.shape[1] > max_coeffs
+                    ):
+                        print(pipeline.steps)
+                        pipeline.steps[1] = ("Interaction Variables", None)
+                        pipeline.steps[2] = ("VIF", None)
+                        print(pipeline.steps)
+                        transformed_data = pipeline.fit_transform(
+                            self.x_data.loc[y_data.index, :]
                         )
-                    #                    sc = scalers[scaler]
-                    #                    if sc is not None:
-                    #                        x_data = sc.fit_transform(
-                    #                   self.x_data.loc[y_data.index, :]
-                    #                                )
-                    #                    else:
-                    #           x_data = self.x_data.loc[y_data.index, :]
-                    #               x_data['y'] = y_data.loc[:, self.target]
-                    #                    model = bmb.Model(
-                    #                            f"y ~ {vals_str}",
-                    #                            x_data,
-                    #                            family=reg
-                    #                            )
-                    #                    _ = model.fit(
-                    #                        progressbar=False,
-                    #                        **kwargs
-                    #                        )
-                    #                    pipeline = Pipeline([
-                    #                        ("Scaler", scaler),
-                    #                        ("Regression", model)
-                    #                        ])
-                    else:
-                        # If using scikit-learn API compatible classifier,
-                        # Build pipeline and fit to
-                        pipeline = Pipeline(
-                            [
-                                (
-                                    "Selector",
-                                    ColumnTransformer(
-                                        [("selector", "passthrough", vals)],
-                                        remainder="drop",
-                                    ),
-                                ),
-                                ("Scaler", self.scaler_list[scaler]),
-                                ("Regression", reg),
-                            ]
-                        )
-                        pipeline.fit(
-                            self.x_data.loc[y_data.index, :],
-                            y_data.loc[:, self.target],
-                        )
+
+                    regressor = reg.fit(
+                        transformed_data, y_data.loc[:, self.target]
+                    )
+                    pipeline.steps.append(("Regressor", dc(regressor)))
                     if isinstance(self.pkl, Path):
-                        pkl_path = self.pkl / name / scaler / vals_str
+                        pkl_path = self.pkl / name / scaler / sec_vars
                         pkl_path.mkdir(parents=True, exist_ok=True)
                         pkl_file = pkl_path / f"{fold}.pkl"
                         with pkl_file.open("wb") as pkl:
                             pickle.dump(pipeline, pkl)
-                        self.models[name][scaler][vals_str][fold] = pkl_file
+                        self.models[name][scaler][sec_vars][fold] = pkl_file
                     else:
-                        self.models[name][scaler][vals_str][fold] = dc(
+                        self.models[name][scaler][sec_vars][fold] = dc(
                             pipeline
                         )
 
-    def pymc_bayesian(
-        self,
-        family: Literal[
-            "Gaussian",
-            "Student T",
-        ] = "Gaussian",
-        name: str = " PyMC Bayesian",
-        **kwargs,
-    ):
-        """
-        Performs bayesian linear regression (either uni or multivariate)
-        fitting x on y.
-
-        Performs bayesian linear regression, both univariate and multivariate,
-        on X against y. More details can be found at:
-        https://pymc.io/projects/examples/en/latest/generalized_linear_models/
-        GLM-robust.html
-
-        Parameters
-        ----------
-        family : {'Gaussian', 'Student T'}, default='Gaussian'
-            Statistical distribution to fit measurements to. Options are:
-                - Gaussian
-                - Student T
-        """
-        # Define model families
-        model_families: dict[str, Literal["t", "gaussian"]] = {
-            "Gaussian": "gaussian",
-            "Student T": "t",
-        }
-        self._sklearn_regression_meta(
-            model_families[family], f"{name} ({model_families})", **kwargs
-        )
-
     def linreg(
-        self,
+        self: Self,
         name: str = "Linear Regression",
         random_search: bool = False,
         parameters: dict[
             str, Union[scipy.stats.rv_continuous, List[Union[int, str, float]]]
         ] = {},
         **kwargs,
-    ):
+    ) -> None:
         """
         Fit x on y via linear regression
 
@@ -707,7 +668,7 @@ class Calibrate:
         )
 
     def ridge(
-        self,
+        self: Self,
         name: str = "Ridge Regression",
         random_search: bool = False,
         parameters: dict[
@@ -763,7 +724,7 @@ class Calibrate:
         )
 
     def ridge_cv(
-        self,
+        self: Self,
         name: str = "Ridge Regression (Cross Validated)",
         random_search: bool = False,
         **kwargs,
@@ -786,7 +747,7 @@ class Calibrate:
         )
 
     def lasso(
-        self,
+        self: Self,
         name: str = "Lasso Regression",
         random_search: bool = False,
         parameters: dict[
@@ -834,7 +795,7 @@ class Calibrate:
         )
 
     def lasso_cv(
-        self,
+        self: Self,
         name: str = "Lasso Regression (Cross Validated)",
         random_search: bool = False,
         **kwargs,
@@ -857,7 +818,7 @@ class Calibrate:
         )
 
     def elastic_net(
-        self,
+        self: Self,
         name: str = "Elastic Net Regression",
         random_search: bool = False,
         parameters: dict[
@@ -906,7 +867,7 @@ class Calibrate:
         )
 
     def elastic_net_cv(
-        self,
+        self: Self,
         name: str = "Elastic Net Regression (Cross Validated)",
         random_search: bool = False,
         **kwargs,
@@ -928,7 +889,7 @@ class Calibrate:
         )
 
     def lars(
-        self,
+        self: Self,
         name: str = "Least Angle Regression",
         random_search: bool = False,
         parameters: dict[
@@ -972,7 +933,7 @@ class Calibrate:
         )
 
     def lars_lasso(
-        self,
+        self: Self,
         name: str = "Least Angle Lasso Regression",
         random_search: bool = False,
         parameters: dict[
@@ -1016,7 +977,7 @@ class Calibrate:
         )
 
     def omp(
-        self,
+        self: Self,
         name: str = "Orthogonal Matching Pursuit",
         random_search: bool = False,
         parameters: dict[
@@ -1061,7 +1022,7 @@ class Calibrate:
         )
 
     def bayesian_ridge(
-        self,
+        self: Self,
         name: str = "Bayesian Ridge Regression",
         random_search: bool = False,
         parameters: dict[
@@ -1111,7 +1072,7 @@ class Calibrate:
         )
 
     def bayesian_ard(
-        self,
+        self: Self,
         name: str = "Bayesian Automatic Relevance Detection",
         random_search: bool = False,
         parameters: dict[
@@ -1161,7 +1122,7 @@ class Calibrate:
         )
 
     def tweedie(
-        self,
+        self: Self,
         name: str = "Tweedie Regression",
         random_search: bool = False,
         parameters: dict[
@@ -1210,7 +1171,7 @@ class Calibrate:
         )
 
     def stochastic_gradient_descent(
-        self,
+        self: Self,
         name: str = "Stochastic Gradient Descent",
         random_search: bool = False,
         parameters: dict[
@@ -1269,7 +1230,7 @@ class Calibrate:
         )
 
     def passive_aggressive(
-        self,
+        self: Self,
         name: str = "Passive Aggressive Regression",
         random_search: bool = False,
         parameters: dict[
@@ -1318,7 +1279,7 @@ class Calibrate:
         )
 
     def ransac(
-        self,
+        self: Self,
         name: str = "RANSAC",
         random_search: bool = False,
         parameters: dict[
@@ -1369,7 +1330,7 @@ class Calibrate:
         )
 
     def theil_sen(
-        self,
+        self: Self,
         name: str = "Theil-Sen Regression",
         random_search: bool = False,
         parameters: dict[
@@ -1413,7 +1374,7 @@ class Calibrate:
         )
 
     def huber(
-        self,
+        self: Self,
         name: str = "Huber Regression",
         random_search: bool = False,
         parameters: dict[
@@ -1461,7 +1422,7 @@ class Calibrate:
         )
 
     def quantile(
-        self,
+        self: Self,
         name: str = "Quantile Regression",
         random_search: bool = False,
         parameters: dict[
@@ -1515,7 +1476,7 @@ class Calibrate:
         )
 
     def decision_tree(
-        self,
+        self: Self,
         name: str = "Decision Tree",
         random_search: bool = False,
         parameters: dict[
@@ -1569,7 +1530,7 @@ class Calibrate:
         )
 
     def extra_tree(
-        self,
+        self: Self,
         name: str = "Extra Tree",
         random_search: bool = False,
         parameters: dict[
@@ -1623,7 +1584,7 @@ class Calibrate:
         )
 
     def random_forest(
-        self,
+        self: Self,
         name: str = "Random Forest",
         random_search: bool = False,
         parameters: dict[
@@ -1678,7 +1639,7 @@ class Calibrate:
         )
 
     def extra_trees_ensemble(
-        self,
+        self: Self,
         name: str = "Extra Trees Ensemble",
         random_search: bool = False,
         parameters: dict[
@@ -1733,7 +1694,7 @@ class Calibrate:
         )
 
     def gradient_boost_regressor(
-        self,
+        self: Self,
         name: str = "Gradient Boosting Regression",
         random_search: bool = False,
         parameters: dict[
@@ -1786,7 +1747,7 @@ class Calibrate:
         )
 
     def hist_gradient_boost_regressor(
-        self,
+        self: Self,
         name: str = "Histogram-Based Gradient Boosting Regression",
         random_search: bool = False,
         parameters: dict[
@@ -1843,7 +1804,7 @@ class Calibrate:
         )
 
     def mlp_regressor(
-        self,
+        self: Self,
         name: str = "Multi-Layer Perceptron Regression",
         random_search: bool = False,
         parameters: dict[
@@ -1907,7 +1868,7 @@ class Calibrate:
         )
 
     def svr(
-        self,
+        self: Self,
         name: str = "Support Vector Regression",
         random_search: bool = False,
         parameters: dict[
@@ -1964,7 +1925,7 @@ class Calibrate:
         )
 
     def linear_svr(
-        self,
+        self: Self,
         name: str = "Linear Support Vector Regression",
         random_search: bool = False,
         parameters: dict[
@@ -2012,7 +1973,7 @@ class Calibrate:
         )
 
     def nu_svr(
-        self,
+        self: Self,
         name: str = "Nu-Support Vector Regression",
         random_search: bool = False,
         parameters: dict[
@@ -2068,7 +2029,7 @@ class Calibrate:
         )
 
     def gaussian_process(
-        self,
+        self: Self,
         name: str = "Gaussian Process Regression",
         random_search: bool = False,
         parameters: dict[
@@ -2124,7 +2085,7 @@ class Calibrate:
         )
 
     def isotonic(
-        self,
+        self: Self,
         name: str = "Isotonic Regression",
         random_search: bool = False,
         parameters: dict[
@@ -2169,7 +2130,7 @@ class Calibrate:
         )
 
     def xgboost(
-        self,
+        self: Self,
         name: str = "XGBoost Regression",
         random_search: bool = False,
         parameters: dict[
@@ -2223,7 +2184,7 @@ class Calibrate:
         )
 
     def xgboost_rf(
-        self,
+        self: Self,
         name: str = "XGBoost Random Forest Regression",
         random_search: bool = False,
         parameters: dict[
@@ -2277,7 +2238,7 @@ class Calibrate:
         )
 
     def linear_gam(
-        self,
+        self: Self,
         name: str = "Linear GAM",
         random_search: bool = False,
         parameters: dict[
@@ -2321,7 +2282,7 @@ class Calibrate:
         )
 
     def expectile_gam(
-        self,
+        self: Self,
         name: str = "Expectile GAM",
         random_search: bool = False,
         parameters: dict[
@@ -2368,9 +2329,161 @@ class Calibrate:
             random_search=random_search,
         )
 
-    def return_measurements(self) -> dict[str, pd.DataFrame]:
+    @classmethod
+    def configure_scalers(
+        cls,
+        scaler_options: ScalingOptions,
+        x_data: pd.DataFrame,
+        y_data: pd.DataFrame,
+    ) -> list[str]:
+        """Configure the scaling algorithms to use.
+
+        Parameters
+        ----------
+        scaler_options : ScalingOptions
+            The options chosen
+        x_data : pd.DataFrame
+            The data to be calibrated
+        y_data : pd.DataFrame
+            The data to calibrate against
         """
-        Returns the measurements used, with missing values and
+        scaler_list = cls.scaler_list
+        scalers = []
+        if isinstance(scaler_options, str):
+            if scaler_options == "All":
+                if bool(x_data.le(0).any(axis=None)) or bool(
+                    y_data.drop("Fold", axis=1).le(0).any(axis=None)
+                ):
+                    scaler_list.pop("Box-Cox Transform")
+                    logger.warning(
+                        "WARN: "
+                        "Box-Cox is not compatible with provided measurements"
+                    )
+                scalers.extend(scaler_list.keys())
+            elif scaler_options in scaler_list:
+                scalers.append(scaler_options)
+            else:
+                scalers.append("None")
+                logger.warning(
+                    "Scaling algorithm %s not recognised", scaler_options
+                )
+        elif isinstance(scaler_options, (tuple, list)):
+            for sc in scaler_options:
+                if sc == "Box-Cox Transform" and not any(
+                    (
+                        bool(x_data.lt(0).any(axis=None)),
+                        bool(y_data.lt(0).any(axis=None)),
+                    )
+                ):
+                    logger.warning(
+                        "Box-Cox is not compatible with provided measurements"
+                    )
+                    continue
+                if sc in scaler_list:
+                    scalers.append(sc)
+                else:
+                    logger.warning("Scaling algorithm %s not recognised", sc)
+        else:
+            scaler_error = "Scaler parameter should be string, list or tuple"
+            raise TypeError(scaler_error)
+        if not scalers:
+            logger.warning(
+                "No valid scaling algorithms provided, defaulting to None"
+            )
+            scalers.append("None")
+        return scalers
+
+    @staticmethod
+    def cont_strat_folds(
+        df: pd.DataFrame,
+        target_var: str,
+        splits: int = 5,
+        strat_groups: int = 5,
+        validation_size: float = 0.1,
+        seed: int = 62,
+    ) -> pd.DataFrame:
+        """Create stratified k-folds on continuous variable.
+
+        Parameters
+        ----------
+        df : pd.DataFrame
+            Target data to stratify on.
+        target_var : str
+            Target feature name.
+        splits : int, default=5
+            Number of folds to make.
+        strat_groups : int, default=10
+            Number of groups to split data in to for stratification.
+        validation_size : float, default = 0.1
+            Size of measurements to keep aside for validation
+        seed : int, default=62
+            Random state to use.
+
+        Returns
+        -------
+        pd.DataFrame
+            `y_df` with added 'Fold' column, specifying which test data fold
+            variable corresponds to.
+
+        Examples
+        --------
+        >>> df = pd.read_csv('data.csv')
+        >>> df
+        |    | x | a | b |
+        |    |   |   |   |
+        |  0 |2.3|1.8|7.2|
+        |  1 |3.2|9.6|4.5|
+        |....|...|...|...|
+        |1000|2.3|4.5|2.2|
+        >>> df_with_folds = const_strat_folds(
+                df=df,
+                target='a',
+                splits=3,
+                strat_groups=3.
+                seed=78
+            )
+        >>> df_with_folds
+        |    | x | a | b |Fold|
+        |    |   |   |   |    |
+        |  0 |2.3|1.8|7.2| 2  |
+        |  1 |3.2|9.6|4.5| 1  |
+        |....|...|...|...|....|
+        |1000|2.3|4.5|2.2| 0  |
+
+        All folds should have a roughly equal distribution of values for 'a'
+
+        """
+        _df = df.copy()
+        _df["Fold"] = "Validation"
+        skf = StratifiedKFold(n_splits=splits, random_state=seed, shuffle=True)
+        _df["Group"] = pd.qcut(
+            _df.loc[:, target_var], strat_groups, labels=False
+        )
+
+        group_label = _df.loc[:, "Group"]
+
+        train_set, val_set = train_test_split(
+            _df,
+            test_size=validation_size,
+            random_state=seed,
+            shuffle=True,
+            stratify=group_label,
+        )
+
+        group_label = train_set.loc[:, "Group"]
+
+        for fold_number, (_, v) in enumerate(
+            skf.split(group_label, group_label)
+        ):
+            _temp_df = train_set.iloc[v, :]
+            _temp_df.loc[:, "Fold"] = fold_number
+            train_set.iloc[v, :] = _temp_df
+        return (
+            pd.concat([train_set, val_set]).sort_index().drop("Group", axis=1)
+        )
+
+    def return_measurements(self: Self) -> dict[str, pd.DataFrame]:
+        """Return the measurements used, with missing values and
         non-overlapping measurements excluded
 
         Returns
@@ -2387,7 +2500,7 @@ class Calibrate:
         return {"x": self.x_data, "y": self.y_data}
 
     def return_models(
-        self,
+        self: Self,
     ) -> dict[
         str,  # Technique
         dict[
@@ -2417,4 +2530,4 @@ class Calibrate:
     def clear_models(self):
         """ """
         del self.models
-        self.models = dict()
+        self.models = {}
