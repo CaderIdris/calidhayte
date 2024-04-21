@@ -8,7 +8,7 @@ from sklearn.pipeline import Pipeline
 from calidhayte.calibrate import Calibrate
 
 
-@pytest.fixture
+@pytest.fixture()
 def full_data():
     """
     Dataset composed of random values. y df constructed from x_df scaled by
@@ -18,9 +18,15 @@ def full_data():
     x_df = pd.DataFrame()
     x_df["x"] = pd.Series(np.random.rand(300))
     x_df["a"] = pd.Series(np.random.rand(300))
+    x_df.index = pd.date_range(
+        start=pd.Timestamp("2020-01-01"),
+        periods=300,
+        freq='1h'
+    )
     coeffs = np.random.randn(2)
 
     y_df = pd.DataFrame()
+    y_df.index = x_df.index
     modded = x_df * coeffs
 
     y_df["x"] = modded.sum(axis=1)
@@ -28,6 +34,11 @@ def full_data():
     z_df = pd.DataFrame()
     z_df["x"] = pd.Series(np.random.rand(300))
     z_df["a"] = pd.Series(np.random.rand(300))
+    z_df.index = pd.date_range(
+        start=pd.Timestamp("2021-01-01"),
+        periods=300,
+        freq='1h'
+    )
 
     return {"x": x_df, "y": y_df, "z": z_df}
 
@@ -66,7 +77,10 @@ def test_data_split(full_data, folds):
 @pytest.mark.parametrize(
     ("polynomial_degree", "vif_bound"), [(1, None), (2, 5)]
 )
-def test_skl_cals(full_data, polynomial_degree, vif_bound):
+@pytest.mark.parametrize(
+    "time_col", [False, True]
+)
+def test_skl_cals(full_data, polynomial_degree, vif_bound, time_col):
     """
     Combines all possible multivariate key combos with each skl calibration
     method except omp which needs at least 1 mv key
@@ -114,6 +128,7 @@ def test_skl_cals(full_data, polynomial_degree, vif_bound):
         target="x",
         interaction_degree=polynomial_degree,
         vif_bound=vif_bound,
+        add_time_column=time_col
     )
     for func in funcs:
         print(func)

@@ -120,6 +120,50 @@ class VIF(BaseEstimator, TransformerMixin):
         return self.features
 
 
+class TimeColumnTransformer(BaseEstimator, TransformerMixin):
+    """ """
+    def __init__(self: Self) -> None:
+        """"""
+        self.earliest: Optional[int] = None
+        self.latest: Optional[int] = None
+        self.feature_names_in_: Optional[list[str]] = None
+
+    def fit(self: Self, x: pd.DataFrame, _: None = None) -> Self:
+        """"""
+        dates = self.pandas_to_unix(pd.Series(x.index))
+        self.earliest = dates.min()
+        self.latest = dates.max()
+        self.feature_names_in_ = list(x.columns)
+        return self
+
+    def transform(self: Self, x: pd.DataFrame, _: None = None) -> pd.DataFrame:
+        """"""
+        if self.earliest is None or self.latest is None:
+            err = "Transformer not fitted"
+            raise ValueError(err)
+        dates = self.pandas_to_unix(pd.Series(x.index))
+        dates.index = x.index
+        new_x = x.copy()
+        new_x['Time Since Origin'] = dates.sub(
+            self.earliest
+        ).div(
+            self.latest - self.earliest
+        )
+        return new_x
+
+    def get_feature_names_out(self: Self, _: list[str]) -> list[str]:
+        """"""
+        if self.feature_names_in_ is None:
+            err = "Transformer not fitted"
+            raise ValueError(err)
+        return [*self.feature_names_in_, "Time Since Origin"]
+
+    @staticmethod
+    def pandas_to_unix(dates: pd.Series) -> pd.Series:
+        """"""
+        return dates.sub(pd.Timestamp("1970-01-01")) // pd.Timedelta("1s")
+
+
 class PolynomialPandas(BaseEstimator, TransformerMixin):
     """ """
 
@@ -255,9 +299,11 @@ class Calibrate:
         x_data: pd.DataFrame,
         y_data: pd.DataFrame,
         target: str,
+        *,
         scaler: ScalingOptions = "None",
         interaction_degree: int = 0,
         vif_bound: Optional[float] = None,
+        add_time_column: bool = False,
         pickle_path: Optional[Path] = None,
         folds: int = 5,
         validation_size: float = 0.1,
@@ -286,6 +332,9 @@ class Calibrate:
         vif_bound : float, optional, default=None
             Bound for vif dimensional reduction, any feature with a vif above
             the set value will be discarded
+        add_time_column : bool, default=False
+            Should a time column be added to the data during transformation.
+            Earliest timestamp in fitted data is 0, latest timestamp is 1
         pickle_path : Path, optional, default=None
             Where to save trained estimators as pickle files, will not save if
             path not provided
@@ -340,6 +389,7 @@ class Calibrate:
             scalers=scaler_list,
             interaction_degree=interaction_degree,
             vif_bound=vif_bound,
+            add_time_column=add_time_column,
             pickle_path=pickle_path,
             seed=seed,
             folds=folds,
@@ -350,12 +400,14 @@ class Calibrate:
 
     def __init__(
         self: Self,
+        *,
         x_data: pd.DataFrame,
         y_data: pd.DataFrame,
         target: str,
         scalers: list[str],
         interaction_degree: int,
         vif_bound: Optional[float],
+        add_time_column: bool,
         pickle_path: Optional[Path],
         seed: int,
         folds: int,
@@ -401,6 +453,11 @@ class Calibrate:
         self.vif_bound: Optional[float] = vif_bound
         """
         Bound to use for VIF dimensional reduction, VIF not used if None
+        """
+        self.add_time_column: bool = add_time_column
+        """
+        Add a column representing time since first timestamp seen during
+        fitting pipeline to the transformation steps?
         """
         self.models: dict[
             str,  # Technique name
@@ -516,6 +573,11 @@ class Calibrate:
                         if self.vif_bound is not None
                         else None
                     )
+
+                    time_column = (
+                            TimeColumnTransformer() if self.add_time_column
+                            else None
+                    )
                     pipeline = Pipeline(
                         [
                             (
@@ -529,6 +591,7 @@ class Calibrate:
                             ("Interaction Variables", interaction_vars),
                             ("VIF", vif),
                             ("Scaler", self.scaler_list[scaler]),
+                            ("Time Column", time_column),
                         ]
                     )
                     pipeline.fit(
@@ -599,10 +662,9 @@ class Calibrate:
                     if (transformed_data.shape[1] < min_coeffs) or (
                         transformed_data.shape[1] > max_coeffs
                     ):
-                        print(pipeline.steps)
                         pipeline.steps[1] = ("Interaction Variables", None)
                         pipeline.steps[2] = ("VIF", None)
-                        print(pipeline.steps)
+                        pipeline.steps[4] = ("Time Column", None)
                         transformed_data = pipeline.fit_transform(
                             self.x_data.loc[y_data.index, :]
                         )

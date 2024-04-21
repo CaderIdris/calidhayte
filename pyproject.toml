@@ -49,7 +49,7 @@ markers = [
 
 addopts = [
 	"--cov=calidhayte",
-	"--cov-report=html:reports/",
+	"--cov-report=html:reports/coverage/",
 	"--html=reports/tests/index.html",
 	"--self-contained-html"
 ]
