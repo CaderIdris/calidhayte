@@ -305,6 +305,7 @@ class Calibrate:
         vif_bound: Optional[float] = None,
         add_time_column: bool = False,
         pickle_path: Optional[Path] = None,
+        subsample_data: Optional[Union[int, float]] = None,
         folds: int = 5,
         validation_size: float = 0.1,
         strat_groups: int = 10,
@@ -338,6 +339,8 @@ class Calibrate:
         pickle_path : Path, optional, default=None
             Where to save trained estimators as pickle files, will not save if
             path not provided
+        subsample_data : float, int, optional, default=None
+            Subsample of data to use
         folds : int, default=5
             Number of folds to split the data into, using stratified k-fold.
         validation_size : float, default=0.1
@@ -365,6 +368,12 @@ class Calibrate:
         if target not in x_data.columns or target not in y_data.columns:
             error_string = f"{target} does not exist in both columns."
             raise ValueError(error_string)
+        if subsample_data is not None:
+            x_data = cls.subsample_df(
+                x_data,
+                target,
+                subsample_data
+            )
         join_index = (
             x_data.join(y_data, how="inner", lsuffix="x", rsuffix="y")
             .dropna()
@@ -2454,6 +2463,35 @@ class Calibrate:
             )
             scalers.append("None")
         return scalers
+
+    @staticmethod
+    def subsample_df(
+        df: pd.DataFrame,
+        target_var: str,
+        subsample_size: Union[float, int] = 1.0,
+        strat_groups: int = 25,
+        seed: int = 62,
+    ) -> pd.DataFrame:
+        """Create stratified k-folds on continuous variable.
+        """
+        _df = df.copy()
+        _df["Group"] = pd.qcut(
+            _df.loc[:, target_var], strat_groups, labels=False
+        )
+
+        group_label = _df.loc[:, "Group"]
+
+        _, subset = train_test_split(
+            _df,
+            test_size=subsample_size,
+            random_state=seed,
+            shuffle=True,
+            stratify=group_label,
+        )
+
+        return (
+            subset.drop("Group", axis=1)
+        )
 
     @staticmethod
     def cont_strat_folds(

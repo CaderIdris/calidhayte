@@ -178,3 +178,35 @@ def test_skl_cals(full_data, polynomial_degree, vif_bound, time_col):
         if not result:
             print(f"{test}: {result}")
     assert all(tests.values())
+
+
+@pytest.mark.cal()
+@pytest.mark.parametrize(
+    "proportion", [None, 0.9, 250]
+)
+def test_subsample(full_data, proportion):
+    """Test setting subsample of data."""
+    tests = dict()
+    df_size = full_data['x'].shape[0]
+    coeff_inst = Calibrate.setup(
+        x_data=full_data["x"],
+        y_data=full_data["y"],
+        target="x",
+        subsample_data=proportion,
+    )
+    measurements = coeff_inst.return_measurements()
+    tests['Same size'] = (
+            measurements['x'].shape[0] == measurements['y'].shape[0]
+    )
+    if proportion is None:
+        tests['Coorect size'] = df_size == measurements['x'].shape[0]
+    elif isinstance(proportion, int):
+        tests['Coorect size'] = proportion == measurements['x'].shape[0]
+    else:
+        tests['Correct size'] = df_size * proportion == pytest.approx(
+                    measurements['x'].shape[0], 3
+        )
+    for test, result in tests.items():
+        if not result:
+            print(f"{test}: {result}")
+    assert all(tests.values())
