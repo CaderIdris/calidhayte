@@ -369,11 +369,14 @@ class Calibrate:
             error_string = f"{target} does not exist in both columns."
             raise ValueError(error_string)
         if subsample_data is not None:
-            x_data = cls.subsample_df(
-                x_data,
-                target,
-                subsample_data
-            )
+            try:
+                x_data = cls.subsample_df(
+                    x_data,
+                    target,
+                    subsample_data
+                )
+            except ValueError:
+                logger.warning('Subset size larger than dataset size')
         join_index = (
             x_data.join(y_data, how="inner", lsuffix="x", rsuffix="y")
             .dropna()
@@ -2474,7 +2477,7 @@ class Calibrate:
     ) -> pd.DataFrame:
         """Create stratified k-folds on continuous variable.
         """
-        _df = df.copy()
+        _df = df.copy().dropna(subset=target_var)
         _df["Group"] = pd.qcut(
             _df.loc[:, target_var], strat_groups, labels=False
         )

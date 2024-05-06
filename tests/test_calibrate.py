@@ -49,7 +49,7 @@ def test_data_split(full_data, folds):
     """
     Tests whether data is split properly
     """
-    tests = dict()
+    tests = {}
     print(full_data["x"])
     print(full_data["y"])
     coeff_inst = Calibrate.setup(
@@ -85,7 +85,7 @@ def test_skl_cals(full_data, polynomial_degree, vif_bound, time_col):
     Combines all possible multivariate key combos with each skl calibration
     method except omp which needs at least 1 mv key
     """
-    tests = dict()
+    tests = {}
     funcs: List[Callable[..., None]] = [
         Calibrate.bayesian_ard,
         Calibrate.bayesian_ridge,
@@ -186,7 +186,7 @@ def test_skl_cals(full_data, polynomial_degree, vif_bound, time_col):
 )
 def test_subsample(full_data, proportion):
     """Test setting subsample of data."""
-    tests = dict()
+    tests = {}
     df_size = full_data['x'].shape[0]
     coeff_inst = Calibrate.setup(
         x_data=full_data["x"],
@@ -206,6 +206,30 @@ def test_subsample(full_data, proportion):
         tests['Correct size'] = df_size * proportion == pytest.approx(
                     measurements['x'].shape[0], 3
         )
+    for test, result in tests.items():
+        if not result:
+            print(f"{test}: {result}")
+    assert all(tests.values())
+
+
+@pytest.mark.cal()
+def test_subsample_failsafe(full_data):
+    """Test setting subsample of data."""
+    tests = {}
+    df_size = full_data['x'].shape[0]
+    coeff_inst = Calibrate.setup(
+        x_data=full_data["x"],
+        y_data=full_data["y"],
+        target="x",
+        subsample_data=10000,
+    )
+    measurements = coeff_inst.return_measurements()
+
+    tests['Same size'] = (
+            measurements['x'].shape[0] == measurements['y'].shape[0]
+    )
+    tests['Correct size'] = measurements['x'].shape[0] == df_size
+
     for test, result in tests.items():
         if not result:
             print(f"{test}: {result}")
