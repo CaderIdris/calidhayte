@@ -25,6 +25,7 @@ pytest-cov = "*"
 pytest-html = "*"
 jupyter = "*"
 black = "*"
+ruff = "*"
 
 [requires]
 python_version = "3.11"

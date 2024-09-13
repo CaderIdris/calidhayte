@@ -161,26 +161,47 @@ class TimeColumnTransformer(BaseEstimator, TransformerMixin):
     @staticmethod
     def pandas_to_unix(dates: pd.Series) -> pd.Series:
         """"""
-        return dates.sub(pd.Timestamp("1970-01-01")) // pd.Timedelta("1s")
+        timezone = dates.dt.tz
+        return dates.sub(pd.Timestamp("1970-01-02", tz=timezone)) // pd.Timedelta("1s")
 
 
 class PolynomialPandas(BaseEstimator, TransformerMixin):
     """ """
 
-    def __init__(self: Self, degree: int) -> None:
+    def __init__(
+        self: Self,
+        degree: int,
+        selected_features: Optional[list[str]] = None
+    ) -> None:
         self.degree = degree
         self.estimator = pre.PolynomialFeatures(
             degree=degree, include_bias=False
         )
+        self.selected_features = selected_features
 
-    def fit(self: Self, x: pd.DataFrame, y: None = None) -> Self:
+    def fit(self: Self, x: pd.DataFrame, y: None = None) -> Optional[Self]:
         """ """
-        self.estimator.fit(x)
+        if self.selected_features is None:
+            self.estimator.fit(x)
+        else:
+            selected_features = [col for col in x.columns if col in self.selected_features]
+            if selected_features:
+                self.estimator.fit(x.loc[:, selected_features])
+            else:
+                return None
         return self
+            
 
     def transform(self: Self, x: pd.DataFrame, y: None = None) -> pd.DataFrame:
         """ """
-        transformed_array = self.estimator.transform(x)
+        if self.selected_features is None:
+            transformed_array = self.estimator.transform(x)
+        else:
+            selected_features = [col for col in x.columns if col in self.selected_features]
+            if selected_features:
+                transformed_array = self.estimator.transform(x.loc[:, selected_features])
+            else:
+                return x
         return pd.DataFrame(
             transformed_array,
             index=x.index,
@@ -302,6 +323,7 @@ class Calibrate:
         *,
         scaler: ScalingOptions = "None",
         interaction_degree: int = 0,
+        interaction_features: Optional[list[str]] = None,
         vif_bound: Optional[float] = None,
         add_time_column: bool = False,
         pickle_path: Optional[Path] = None,
@@ -330,6 +352,9 @@ class Calibrate:
             data
         interaction_degree : int, default=0
             Polynomial degree for interaction variables
+        interaction_features : list[str], optional
+            Features to transform with the PolynomialFeatures transformer.
+            Will use all features if not None
         vif_bound : float, optional, default=None
             Bound for vif dimensional reduction, any feature with a vif above
             the set value will be discarded
@@ -400,6 +425,7 @@ class Calibrate:
             target=target,
             scalers=scaler_list,
             interaction_degree=interaction_degree,
+            interaction_features=interaction_features,
             vif_bound=vif_bound,
             add_time_column=add_time_column,
             pickle_path=pickle_path,
@@ -418,6 +444,7 @@ class Calibrate:
         target: str,
         scalers: list[str],
         interaction_degree: int,
+        interaction_features: Optional[list[str]],
         vif_bound: Optional[float],
         add_time_column: bool,
         pickle_path: Optional[Path],
@@ -462,11 +489,16 @@ class Calibrate:
         The polynomial degree for interaction variables, will disable
         polynomial features if less than 2
         """
+        self.interaction_features: Optional[list[str]] = interaction_features
+        """
+        The features to transform with the PolynomialFeatures transformer.
+        Will use all features if None.
+        """
         self.vif_bound: Optional[float] = vif_bound
         """
         Bound to use for VIF dimensional reduction, VIF not used if None
         """
-        self.add_time_column: bool = add_time_column
+        self.add_time_column: tuple[bool, ...] = (False,) if add_time_column else (True, False)
         """
         Add a column representing time since first timestamp seen during
         fitting pipeline to the transformation steps?
@@ -560,59 +592,72 @@ class Calibrate:
                 # classification
                 # technique yet, add its key to the nested dictionary
             for sec_vals in secondary_vals:
+                for add_time_column in self.add_time_column:
                 # Loop over all combinations of secondary values
-                if sec_vals is not None:
-                    vals = [self.target] + [v for v in sec_vals if v == v]
-                else:
-                    vals = [self.target]
-                vals_str = " + ".join(vals)
-                self.transformer_pipelines[scaler][vals_str] = {}
-                for fold in self.y_data.loc[:, "Fold"].unique():
-                    if fold == "Validation":
-                        continue
-                    y_data = self.y_data[
-                        ~self.y_data.loc[:, "Fold"].isin([fold, "Validation"])
-                    ]
-                    if self.interaction_degree > 1:
-                        interaction_vars = PolynomialPandas(
-                            degree=self.interaction_degree
-                        )
+                    if sec_vals is not None:
+                        vals = [self.target] + [v for v in sec_vals if v == v]
                     else:
-                        interaction_vars = None
-
-                    vif = (
-                        VIF(target=self.target, bound=self.vif_bound)
-                        if self.vif_bound is not None
-                        else None
-                    )
-
-                    time_column = (
-                            TimeColumnTransformer() if self.add_time_column
-                            else None
-                    )
-                    pipeline = Pipeline(
-                        [
-                            (
-                                "Selector",
-                                ColumnTransformer(
-                                    [("selector", "passthrough", vals)],
-                                    remainder="drop",
-                                    verbose_feature_names_out=False,
-                                ).set_output(transform="pandas"),
-                            ),
-                            ("Interaction Variables", interaction_vars),
-                            ("VIF", vif),
-                            ("Scaler", self.scaler_list[scaler]),
-                            ("Time Column", time_column),
+                        vals = [self.target]
+                    if add_time_column:
+                        vals.append("Time")
+                    for fold in self.y_data.loc[:, "Fold"].unique():
+                        if fold == "Validation":
+                            continue
+                        y_data = self.y_data[
+                            ~self.y_data.loc[:, "Fold"].isin([fold, "Validation"])
                         ]
-                    )
-                    pipeline.fit(
-                        self.x_data.loc[y_data.index, :],
-                        y_data.loc[:, self.target],
-                    )
-                    self.transformer_pipelines[scaler][vals_str][fold] = dc(
-                        pipeline
-                    )
+                        if self.interaction_degree > 1:
+                            interaction_vars = PolynomialPandas(
+                                degree=self.interaction_degree,
+                                selected_features=self.interaction_features
+
+                            ).set_output(transform="pandas")
+                        else:
+                            interaction_vars = None
+
+                        vif = (
+                            VIF(target=self.target, bound=self.vif_bound)
+                            if self.vif_bound is not None
+                            else None
+                        )
+
+                        time_column = (
+                                TimeColumnTransformer() if add_time_column
+                                else None
+                        )
+
+                        scaler_transformer = (
+                            None if self.scaler_list[scaler] is None
+                            else self.scaler_list[scaler].set_output(transform="pandas")
+                        )
+
+                        pipeline = Pipeline(
+                            [
+                                (
+                                    "Selector",
+                                    ColumnTransformer(
+                                        [("selector", "passthrough", vals)],
+                                        remainder="drop",
+                                        verbose_feature_names_out=False,
+                                    ).set_output(transform="pandas"),
+                                ),
+                                ("Interaction Variables", interaction_vars),
+                                ("VIF", vif),
+                                ("Scaler", scaler_transformer),
+                                ("Time Column", time_column),
+                            ]
+                        )
+                        pipeline.fit(
+                            self.x_data.loc[y_data.index, :],
+                            y_data.loc[:, self.target],
+                        )
+                        vals_str = " + ".join(list(pipeline.get_feature_names_out()))
+                        if vals_str not in self.transformer_pipelines[scaler]:
+                            self.transformer_pipelines[scaler][vals_str] = {}
+                        self.transformer_pipelines[scaler][vals_str][fold] = dc(
+                            pipeline
+                        )
+                        print(vals_str)
 
     def _sklearn_regression_meta(
         self: Self,
@@ -2425,10 +2470,12 @@ class Calibrate:
         scalers = []
         if isinstance(scaler_options, str):
             if scaler_options == "All":
-                if bool(x_data.le(0).any(axis=None)) or bool(
-                    y_data.drop("Fold", axis=1).le(0).any(axis=None)
+                if (
+                        bool(x_data.le(0).any(axis=None)) or 
+                        bool(y_data.drop("Fold", axis=1).le(0).any(axis=None)
+                    ) and "Box-Cox Transform" in scaler_list
                 ):
-                    scaler_list.pop("Box-Cox Transform")
+                    scaler_list.pop("Box-Cox Transform", None)
                     logger.warning(
                         "WARN: "
                         "Box-Cox is not compatible with provided measurements"
