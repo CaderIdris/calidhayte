@@ -28,8 +28,54 @@ dependencies = [
 requires = ["setuptools>=42.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
-[tool.flake8]
-exclude = "docs"
+[tool.ruff]
+extend-include = ["*.ipynb"]
+line-length = 79
+indent-width = 4
+
+[tool.ruff.lint]
+select = [
+        "F",  # pyflakes: General
+        "E",  # pycodestyle: General errors
+        "W",  # pycodestyle: General warnings
+        "N",  # pep8-naming: Use proper names
+        "RUF",  # Ruff-specific-rules: Extra rules
+	"T20",  # flake8-print: No print statements, use logging!"
+]
+
+ignore = [
+        "Q000",
+        "Q001",
+        "N802",
+        "N806",
+]
+
+exclude = [
+	"__pycache__",
+	"env",
+	".env",
+	"venv",
+	".venv",
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "numpy"
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*.py" = [
+	"D100",
+	"D101",
+	"D102",
+	"D103",
+	"D104",
+	"D105",
+	"D106",
+	"D107",
+	"S101",  # use of "assert"
+	"S102",  # use of "exec"
+	"S106",  # possible hardcoded password.
+	"T20"
+]
 
 [tool.black]
 line-length = 79
@@ -48,10 +94,11 @@ markers = [
 ]
 
 addopts = [
+	"--html=reports/tests/index.html",
+	"--self-contained-html",
 	"--cov=calidhayte",
 	"--cov-report=html:reports/coverage/",
-	"--html=reports/tests/index.html",
-	"--self-contained-html"
+	"--cov-report=term-missing"
 ]
 
 [tool.mypy]
@@ -72,7 +119,7 @@ no_implicit_reexport = true
 legacy_tox_ini = """
 	[tox]
 	minversion = 4.0
-	envlist = py310, py311, flake8, mypy
+	envlist = py310, py311, ruff, mypy
 	isolated_build = true
 
 	[gh-actions]
@@ -88,10 +135,10 @@ legacy_tox_ini = """
 	commands =
 		pytest --basetemp={envtmpdir}
 
-	[testenv:flake8]
+	[testenv:ruff]
 	basepython = python3.11
 	deps = -r requirements.txt
-	commands = flake8 src tests
+	commands = ruff check src tests
 
 	[testenv:mypy]
 	basepython = python3.11

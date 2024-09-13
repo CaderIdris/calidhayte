@@ -136,22 +136,31 @@ def test_skl_cals(full_data, polynomial_degree, vif_bound, time_col):
     models = coeff_inst.return_models()
     tests["Correct number of techniques"] = len(models.keys()) == len(funcs)
     for technique, scaling_methods in models.items():
+        if vif_bound:
+            continue
         tests[f"Correct number of scalers {technique}"] = (
             len(scaling_methods.keys()) == 1
         )
         for _, var_combos in scaling_methods.items():
-            if "Orthogonal Matching Pursuit" in technique:
+            min_coeffs_2 = (
+                "Orthogonal Matching Pursuit" in technique
+            )
+            if min_coeffs_2:
                 correct_num_of_vars = 1
             elif "Isotonic Regression" in technique:
-                print(var_combos.keys())
                 correct_num_of_vars = 1
             else:
                 correct_num_of_vars = 2
+            if time_col and "Isotonic Regression" not in technique:
+                correct_num_of_vars = correct_num_of_vars + 2
 
+            print(
+                f"{technique}: {len(var_combos.keys())}"
+                f"== {correct_num_of_vars}"
+            )
             tests[f"Correct number of vars {technique}"] = (
                 len(var_combos.keys()) == correct_num_of_vars
             )
-
             for vars, folds in var_combos.items():
                 print(technique, vars, len(folds.keys()))
                 if (

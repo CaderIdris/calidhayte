@@ -16,11 +16,10 @@ import pickle
 import sys
 from typing import (
     ClassVar,
-    List,
+    Type,
     Literal,
     Optional,
     TypeVar,
-    Type,
     TypeAlias,
     Union,
 )
@@ -35,7 +34,6 @@ import pandas as pd
 from pygam import GAM, LinearGAM, ExpectileGAM
 import scipy
 from scipy.stats import uniform
-import sklearn as skl
 from sklearn import ensemble as en
 from sklearn import gaussian_process as gp
 from sklearn import isotonic as iso
@@ -43,7 +41,7 @@ from sklearn import linear_model as lm
 from sklearn import neural_network as nn
 from sklearn import svm
 from sklearn import tree
-from sklearn.base import BaseEstimator, TransformerMixin
+from sklearn.base import BaseEstimator, TransformerMixin, RegressorMixin
 from sklearn.gaussian_process import kernels as kern
 import sklearn.preprocessing as pre
 from sklearn.model_selection import StratifiedKFold, RandomizedSearchCV
@@ -162,7 +160,12 @@ class TimeColumnTransformer(BaseEstimator, TransformerMixin):
     def pandas_to_unix(dates: pd.Series) -> pd.Series:
         """"""
         timezone = dates.dt.tz
-        return dates.sub(pd.Timestamp("1970-01-02", tz=timezone)) // pd.Timedelta("1s")
+        return dates.sub(
+            pd.Timestamp(
+                "1970-01-02",
+                tz=timezone
+            )
+        ) // pd.Timedelta("1s")
 
 
 class PolynomialPandas(BaseEstimator, TransformerMixin):
@@ -184,29 +187,41 @@ class PolynomialPandas(BaseEstimator, TransformerMixin):
         if self.selected_features is None:
             self.estimator.fit(x)
         else:
-            selected_features = [col for col in x.columns if col in self.selected_features]
+            selected_features = [
+                col
+                for col in x.columns
+                if col in self.selected_features
+            ]
             if selected_features:
                 self.estimator.fit(x.loc[:, selected_features])
             else:
                 return None
         return self
-            
+
 
     def transform(self: Self, x: pd.DataFrame, y: None = None) -> pd.DataFrame:
         """ """
         if self.selected_features is None:
             transformed_array = self.estimator.transform(x)
+            x = pd.DataFrame(
+                transformed_array,
+                index=x.index,
+                columns=self.estimator.get_feature_names_out(),
+            )
         else:
-            selected_features = [col for col in x.columns if col in self.selected_features]
+            selected_features = [
+                col
+                for col in x.columns
+                if col in self.selected_features
+            ]
             if selected_features:
-                transformed_array = self.estimator.transform(x.loc[:, selected_features])
-            else:
-                return x
-        return pd.DataFrame(
-            transformed_array,
-            index=x.index,
-            columns=self.estimator.get_feature_names_out(),
-        )
+                transformed_array = pd.DataFrame(
+                        self.estimator.transform(x.loc[:, selected_features]),
+                        index=x.index,
+                        columns=pd.Index(selected_features)
+                )
+                x.loc[:, transformed_array.columns] = transformed_array
+        return x
 
     def get_feature_names_out(
         self: Self, input_features: list[str]
@@ -498,7 +513,9 @@ class Calibrate:
         """
         Bound to use for VIF dimensional reduction, VIF not used if None
         """
-        self.add_time_column: tuple[bool, ...] = (False,) if add_time_column else (True, False)
+        self.add_time_column: tuple[bool, ...] = (
+                (True, False) if add_time_column else (False,)
+        )
         """
         Add a column representing time since first timestamp seen during
         fitting pipeline to the transformation steps?
@@ -598,13 +615,13 @@ class Calibrate:
                         vals = [self.target] + [v for v in sec_vals if v == v]
                     else:
                         vals = [self.target]
-                    if add_time_column:
-                        vals.append("Time")
                     for fold in self.y_data.loc[:, "Fold"].unique():
                         if fold == "Validation":
                             continue
                         y_data = self.y_data[
-                            ~self.y_data.loc[:, "Fold"].isin([fold, "Validation"])
+                            ~self.y_data.loc[:, "Fold"].isin(
+                                [fold, "Validation"]
+                            )
                         ]
                         if self.interaction_degree > 1:
                             interaction_vars = PolynomialPandas(
@@ -628,7 +645,9 @@ class Calibrate:
 
                         scaler_transformer = (
                             None if self.scaler_list[scaler] is None
-                            else self.scaler_list[scaler].set_output(transform="pandas")
+                            else self.scaler_list[scaler].set_output(
+                                transform="pandas"
+                            )
                         )
 
                         pipeline = Pipeline(
@@ -651,17 +670,20 @@ class Calibrate:
                             self.x_data.loc[y_data.index, :],
                             y_data.loc[:, self.target],
                         )
-                        vals_str = " + ".join(list(pipeline.get_feature_names_out()))
+                        vals_str = " + ".join(
+                            list(pipeline.get_feature_names_out())
+                        )
                         if vals_str not in self.transformer_pipelines[scaler]:
                             self.transformer_pipelines[scaler][vals_str] = {}
-                        self.transformer_pipelines[scaler][vals_str][fold] = dc(
-                            pipeline
+                        self.transformer_pipelines[scaler][vals_str][fold] = (
+                            dc(
+                                pipeline
+                            )
                         )
-                        print(vals_str)
 
     def _sklearn_regression_meta(
         self: Self,
-        reg: Union[skl.base.RegressorMixin, RandomizedSearchCV, GAM],
+        reg: Union[RegressorMixin, RandomizedSearchCV, GAM],
         name: str,
         min_coeffs: int = 1,
         max_coeffs: int = (sys.maxsize * 2) + 1,
@@ -708,25 +730,16 @@ class Calibrate:
                     y_data = self.y_data[
                         ~self.y_data.loc[:, "Fold"].isin([fold, "Validation"])
                     ]
-                    logging.debug(
+                    logger.debug(
                         "%s, %s, %s and %s", name, scaler, sec_vars, fold
                     )
 
-                    transformed_data = pretrained_pipe.transform(
+                    pipeline = dc(pretrained_pipe)
+                    transformed_data = pipeline.fit_transform(
                         self.x_data.loc[y_data.index, :]
                     )
-                    pipeline = dc(pretrained_pipe)
-                    if (transformed_data.shape[1] < min_coeffs) or (
-                        transformed_data.shape[1] > max_coeffs
-                    ):
-                        pipeline.steps[1] = ("Interaction Variables", None)
-                        pipeline.steps[2] = ("VIF", None)
-                        pipeline.steps[4] = ("Time Column", None)
-                        transformed_data = pipeline.fit_transform(
-                            self.x_data.loc[y_data.index, :]
-                        )
-
-                    regressor = reg.fit(
+                    reg_dc = dc(reg)
+                    regressor = reg_dc.fit(
                         transformed_data, y_data.loc[:, self.target]
                     )
                     pipeline.steps.append(("Regressor", dc(regressor)))
@@ -747,7 +760,7 @@ class Calibrate:
         name: str = "Linear Regression",
         random_search: bool = False,
         parameters: dict[
-            str, Union[scipy.stats.rv_continuous, List[Union[int, str, float]]]
+            str, Union[scipy.stats.rv_continuous, list[Union[int, str, float]]]
         ] = {},
         **kwargs,
     ) -> None:
@@ -764,7 +777,7 @@ class Calibrate:
                 str,
                 Union[
                     scipy.stats.rv_continuous,
-                    List[Union[int, str, float]]
+                    list[Union[int, str, float]]
                 ]
             ], default=Preset distributions
             The parameters used in RandomizedSearchCV
@@ -791,7 +804,7 @@ class Calibrate:
         name: str = "Ridge Regression",
         random_search: bool = False,
         parameters: dict[
-            str, Union[scipy.stats.rv_continuous, List[Union[int, str, float]]]
+            str, Union[scipy.stats.rv_continuous, list[Union[int, str, float]]]
         ] = {
             "alpha": uniform(loc=0, scale=2),
             "tol": uniform(loc=0, scale=1),
@@ -820,7 +833,7 @@ class Calibrate:
                 str,
                 Union[
                     scipy.stats.rv_continuous,
-                    List[Union[int, str, float]]
+                    list[Union[int, str, float]]
                 ]
             ], default=Preset distributions
             The parameters used in RandomizedSearchCV
@@ -870,7 +883,7 @@ class Calibrate:
         name: str = "Lasso Regression",
         random_search: bool = False,
         parameters: dict[
-            str, Union[scipy.stats.rv_continuous, List[Union[int, str, float]]]
+            str, Union[scipy.stats.rv_continuous, list[Union[int, str, float]]]
         ] = {
             "alpha": uniform(loc=0, scale=2),
             "tol": uniform(loc=0, scale=1),
@@ -891,7 +904,7 @@ class Calibrate:
                 str,
                 Union[
                     scipy.stats.rv_continuous,
-                    List[Union[int, str, float]]
+                    list[Union[int, str, float]]
                 ]
             ], default=Preset distributions
             The parameters used in RandomizedSearchCV
@@ -941,7 +954,7 @@ class Calibrate:
         name: str = "Elastic Net Regression",
         random_search: bool = False,
         parameters: dict[
-            str, Union[scipy.stats.rv_continuous, List[Union[int, str, float]]]
+            str, Union[scipy.stats.rv_continuous, list[Union[int, str, float]]]
         ] = {
             "alpha": uniform(loc=0, scale=2),
             "l1_ratio": uniform(loc=0, scale=1),
@@ -963,7 +976,7 @@ class Calibrate:
                 str,
                 Union[
                     scipy.stats.rv_continuous,
-                    List[Union[int, str, float]]
+                    list[Union[int, str, float]]
                 ]
             ], default=Preset distributions
             The parameters used in RandomizedSearchCV
@@ -1012,7 +1025,7 @@ class Calibrate:
         name: str = "Least Angle Regression",
         random_search: bool = False,
         parameters: dict[
-            str, Union[scipy.stats.rv_continuous, List[Union[int, str, float]]]
+            str, Union[scipy.stats.rv_continuous, list[Union[int, str, float]]]
         ] = {"n_nonzero_coefs": list(range(1, 11))},
         **kwargs,
     ):
@@ -1029,7 +1042,7 @@ class Calibrate:
                 str,
                 Union[
                     scipy.stats.rv_continuous,
-                    List[Union[int, str, float]]
+                    list[Union[int, str, float]]
                 ]
             ], default=Preset distributions
             The parameters used in RandomizedSearchCV
@@ -1056,7 +1069,7 @@ class Calibrate:
         name: str = "Least Angle Lasso Regression",
         random_search: bool = False,
         parameters: dict[
-            str, Union[scipy.stats.rv_continuous, List[Union[int, str, float]]]
+            str, Union[scipy.stats.rv_continuous, list[Union[int, str, float]]]
         ] = {"alpha": uniform(loc=0, scale=2)},
         **kwargs,
     ):
@@ -1073,7 +1086,7 @@ class Calibrate:
                 str,
                 Union[
                     scipy.stats.rv_continuous,
-                    List[Union[int, str, float]]
+                    list[Union[int, str, float]]
                 ]
             ], default=Preset distributions
             The parameters used in RandomizedSearchCV
@@ -1100,7 +1113,7 @@ class Calibrate:
         name: str = "Orthogonal Matching Pursuit",
         random_search: bool = False,
         parameters: dict[
-            str, Union[scipy.stats.rv_continuous, List[Union[int, str, float]]]
+            str, Union[scipy.stats.rv_continuous, list[Union[int, str, float]]]
         ] = {"n_nonzero_coefs": list(range(1, 11))},
         **kwargs,
     ):
@@ -1117,7 +1130,7 @@ class Calibrate:
                 str,
                 Union[
                     scipy.stats.rv_continuous,
-                    List[Union[int, str, float]]
+                    list[Union[int, str, float]]
                 ]
             ], default=Preset distributions
             The parameters used in RandomizedSearchCV
@@ -1145,7 +1158,7 @@ class Calibrate:
         name: str = "Bayesian Ridge Regression",
         random_search: bool = False,
         parameters: dict[
-            str, Union[scipy.stats.rv_continuous, List[Union[int, str, float]]]
+            str, Union[scipy.stats.rv_continuous, list[Union[int, str, float]]]
         ] = {
             "tol": uniform(loc=0, scale=1),
             "alpha_1": uniform(loc=0, scale=1),
@@ -1168,7 +1181,7 @@ class Calibrate:
                 str,
                 Union[
                     scipy.stats.rv_continuous,
-                    List[Union[int, str, float]]
+                    list[Union[int, str, float]]
                 ]
             ], default=Preset distributions
             The parameters used in RandomizedSearchCV
@@ -1195,7 +1208,7 @@ class Calibrate:
         name: str = "Bayesian Automatic Relevance Detection",
         random_search: bool = False,
         parameters: dict[
-            str, Union[scipy.stats.rv_continuous, List[Union[int, str, float]]]
+            str, Union[scipy.stats.rv_continuous, list[Union[int, str, float]]]
         ] = {
             "tol": uniform(loc=0, scale=1),
             "alpha_1": uniform(loc=0, scale=1),
@@ -1218,7 +1231,7 @@ class Calibrate:
                 str,
                 Union[
                     scipy.stats.rv_continuous,
-                    List[Union[int, str, float]]
+                    list[Union[int, str, float]]
                 ]
             ], default=Preset distributions
             The parameters used in RandomizedSearchCV
@@ -1245,7 +1258,7 @@ class Calibrate:
         name: str = "Tweedie Regression",
         random_search: bool = False,
         parameters: dict[
-            str, Union[scipy.stats.rv_continuous, List[Union[int, str, float]]]
+            str, Union[scipy.stats.rv_continuous, list[Union[int, str, float]]]
         ] = {
             "power": [0, 1, 1.5, 2, 2.5, 3],
             "alpha": uniform(loc=0, scale=2),
@@ -1267,7 +1280,7 @@ class Calibrate:
                 str,\
                 Union[\
                     scipy.stats.rv_continuous,\
-                    List[Union[int, str, float]]\
+                    list[Union[int, str, float]]\
                 ]\
             ], default=Preset distributions
             The parameters used in RandomizedSearchCV
@@ -1294,7 +1307,7 @@ class Calibrate:
         name: str = "Stochastic Gradient Descent",
         random_search: bool = False,
         parameters: dict[
-            str, Union[scipy.stats.rv_continuous, List[Union[int, str, float]]]
+            str, Union[scipy.stats.rv_continuous, list[Union[int, str, float]]]
         ] = {
             "tol": uniform(loc=0, scale=1),
             "loss": [
@@ -1326,7 +1339,7 @@ class Calibrate:
                 str,
                 Union[
                     scipy.stats.rv_continuous,
-                    List[Union[int, str, float]]
+                    list[Union[int, str, float]]
                 ]
             ], default=Preset distributions
             The parameters used in RandomizedSearchCV
@@ -1353,7 +1366,7 @@ class Calibrate:
         name: str = "Passive Aggressive Regression",
         random_search: bool = False,
         parameters: dict[
-            str, Union[scipy.stats.rv_continuous, List[Union[int, str, float]]]
+            str, Union[scipy.stats.rv_continuous, list[Union[int, str, float]]]
         ] = {
             "C": uniform(loc=0, scale=2),
             "tol": uniform(loc=0, scale=1),
@@ -1375,7 +1388,7 @@ class Calibrate:
                 str,\
                 Union[\
                     scipy.stats.rv_continuous,\
-                    List[Union[int, str, float]]\
+                    list[Union[int, str, float]]\
                 ]\
             ], default=Preset distributions
             The parameters used in RandomizedSearchCV
@@ -1402,7 +1415,7 @@ class Calibrate:
         name: str = "RANSAC",
         random_search: bool = False,
         parameters: dict[
-            str, Union[scipy.stats.rv_continuous, List[Union[int, str, float]]]
+            str, Union[scipy.stats.rv_continuous, list[Union[int, str, float]]]
         ] = {
             "estimator": [
                 lm.LinearRegression(),
@@ -1426,7 +1439,7 @@ class Calibrate:
                 str,\
                 Union[\
                     scipy.stats.rv_continuous,\
-                    List[Union[int, str, float]]\
+                    list[Union[int, str, float]]\
                 ]\
             ], default=Preset distributions
             The parameters used in RandomizedSearchCV
@@ -1453,7 +1466,7 @@ class Calibrate:
         name: str = "Theil-Sen Regression",
         random_search: bool = False,
         parameters: dict[
-            str, Union[scipy.stats.rv_continuous, List[Union[int, str, float]]]
+            str, Union[scipy.stats.rv_continuous, list[Union[int, str, float]]]
         ] = {"tol": uniform(loc=0, scale=1)},
         **kwargs,
     ):
@@ -1470,7 +1483,7 @@ class Calibrate:
                 str,\
                 Union[\
                     scipy.stats.rv_continuous,\
-                    List[Union[int, str, float]]\
+                    list[Union[int, str, float]]\
                 ]\
             ], default=Preset distributions
             The parameters used in RandomizedSearchCV
@@ -1497,7 +1510,7 @@ class Calibrate:
         name: str = "Huber Regression",
         random_search: bool = False,
         parameters: dict[
-            str, Union[scipy.stats.rv_continuous, List[Union[int, str, float]]]
+            str, Union[scipy.stats.rv_continuous, list[Union[int, str, float]]]
         ] = {
             "epsilon": uniform(loc=1, scale=4),
             "alpha": uniform(loc=0, scale=0.01),
@@ -1518,7 +1531,7 @@ class Calibrate:
                 str,\
                 Union[\
                     scipy.stats.rv_continuous,\
-                    List[Union[int, str, float]]\
+                    list[Union[int, str, float]]\
                 ]\
             ], default=Preset distributions
             The parameters used in RandomizedSearchCV
@@ -1545,7 +1558,7 @@ class Calibrate:
         name: str = "Quantile Regression",
         random_search: bool = False,
         parameters: dict[
-            str, Union[scipy.stats.rv_continuous, List[Union[int, str, float]]]
+            str, Union[scipy.stats.rv_continuous, list[Union[int, str, float]]]
         ] = {
             "quantile": uniform(loc=0, scale=2),
             "alpha": uniform(loc=0, scale=2),
@@ -1572,7 +1585,7 @@ class Calibrate:
                 str,\
                 Union[\
                     scipy.stats.rv_continuous,\
-                    List[Union[int, str, float]]\
+                    list[Union[int, str, float]]\
                 ]\
             ], default=Preset distributions
             The parameters used in RandomizedSearchCV
@@ -1599,7 +1612,7 @@ class Calibrate:
         name: str = "Decision Tree",
         random_search: bool = False,
         parameters: dict[
-            str, Union[scipy.stats.rv_continuous, List[Union[int, str, float]]]
+            str, Union[scipy.stats.rv_continuous, list[Union[int, str, float]]]
         ] = {
             "criterion": [
                 "squared_error",
@@ -1626,7 +1639,7 @@ class Calibrate:
                 str,\
                 Union[\
                     scipy.stats.rv_continuous,\
-                    List[Union[int, str, float]]\
+                    list[Union[int, str, float]]\
                 ]\
             ], default=Preset distributions
             The parameters used in RandomizedSearchCV
@@ -1653,7 +1666,7 @@ class Calibrate:
         name: str = "Extra Tree",
         random_search: bool = False,
         parameters: dict[
-            str, Union[scipy.stats.rv_continuous, List[Union[int, str, float]]]
+            str, Union[scipy.stats.rv_continuous, list[Union[int, str, float]]]
         ] = {
             "criterion": [
                 "squared_error",
@@ -1680,7 +1693,7 @@ class Calibrate:
                 str,\
                 Union[\
                     scipy.stats.rv_continuous,\
-                    List[Union[int, str, float]]\
+                    list[Union[int, str, float]]\
                 ]\
             ], default=Preset distributions
             The parameters used in RandomizedSearchCV
@@ -1707,7 +1720,7 @@ class Calibrate:
         name: str = "Random Forest",
         random_search: bool = False,
         parameters: dict[
-            str, Union[scipy.stats.rv_continuous, List[Union[int, str, float]]]
+            str, Union[scipy.stats.rv_continuous, list[Union[int, str, float]]]
         ] = {
             "n_estimators": [5, 25, 100, 250],
             "max_samples": uniform(loc=0.01, scale=0.99),
@@ -1735,7 +1748,7 @@ class Calibrate:
                 str,\
                 Union[\
                     scipy.stats.rv_continuous,\
-                    List[Union[int, str, float]]\
+                    list[Union[int, str, float]]\
                 ]\
             ], default=Preset distributions
             The parameters used in RandomizedSearchCV
@@ -1762,7 +1775,7 @@ class Calibrate:
         name: str = "Extra Trees Ensemble",
         random_search: bool = False,
         parameters: dict[
-            str, Union[scipy.stats.rv_continuous, List[Union[int, str, float]]]
+            str, Union[scipy.stats.rv_continuous, list[Union[int, str, float]]]
         ] = {
             "n_estimators": [5, 25, 100, 250],
             "max_samples": uniform(loc=0.01, scale=0.99),
@@ -1790,7 +1803,7 @@ class Calibrate:
                 str,\
                 Union[\
                     scipy.stats.rv_continuous,\
-                    List[Union[int, str, float]]\
+                    list[Union[int, str, float]]\
                 ]\
             ], default=Preset distributions
             The parameters used in RandomizedSearchCV
@@ -1817,7 +1830,7 @@ class Calibrate:
         name: str = "Gradient Boosting Regression",
         random_search: bool = False,
         parameters: dict[
-            str, Union[scipy.stats.rv_continuous, List[Union[int, str, float]]]
+            str, Union[scipy.stats.rv_continuous, list[Union[int, str, float]]]
         ] = {
             "loss": ["squared_error", "absolute_error", "huber", "quantile"],
             "learning_rate": uniform(loc=0, scale=2),
@@ -1843,7 +1856,7 @@ class Calibrate:
                 str,\
                 Union[\
                     scipy.stats.rv_continuous,\
-                    List[Union[int, str, float]]\
+                    list[Union[int, str, float]]\
                 ]\
             ], default=Preset distributions
             The parameters used in RandomizedSearchCV
@@ -1870,7 +1883,7 @@ class Calibrate:
         name: str = "Histogram-Based Gradient Boosting Regression",
         random_search: bool = False,
         parameters: dict[
-            str, Union[scipy.stats.rv_continuous, List[Union[int, str, float]]]
+            str, Union[scipy.stats.rv_continuous, list[Union[int, str, float]]]
         ] = {
             "loss": [
                 "squared_error",
@@ -1900,7 +1913,7 @@ class Calibrate:
                 str,\
                 Union[\
                     scipy.stats.rv_continuous,\
-                    List[Union[int, str, float]]\
+                    list[Union[int, str, float]]\
                 ]\
             ], default=Preset distributions
             The parameters used in RandomizedSearchCV
@@ -1927,7 +1940,7 @@ class Calibrate:
         name: str = "Multi-Layer Perceptron Regression",
         random_search: bool = False,
         parameters: dict[
-            str, Union[scipy.stats.rv_continuous, List[Union[int, str, float]]]
+            str, Union[scipy.stats.rv_continuous, list[Union[int, str, float]]]
         ] = {
             "hidden_layer_sizes": [
                 (100,),
@@ -1964,7 +1977,7 @@ class Calibrate:
                 str,\
                 Union[\
                     scipy.stats.rv_continuous,\
-                    List[Union[int, str, float]]\
+                    list[Union[int, str, float]]\
                 ]\
             ], default=Preset distributions
             The parameters used in RandomizedSearchCV
@@ -1991,7 +2004,7 @@ class Calibrate:
         name: str = "Support Vector Regression",
         random_search: bool = False,
         parameters: dict[
-            str, Union[scipy.stats.rv_continuous, List[Union[int, str, float]]]
+            str, Union[scipy.stats.rv_continuous, list[Union[int, str, float]]]
         ] = {
             "kernel": [
                 "linear",
@@ -2021,7 +2034,7 @@ class Calibrate:
                 str,\
                 Union[\
                     scipy.stats.rv_continuous,\
-                    List[Union[int, str, float]]\
+                    list[Union[int, str, float]]\
                 ]\
             ], default=Preset distributions
             The parameters used in RandomizedSearchCV
@@ -2048,7 +2061,7 @@ class Calibrate:
         name: str = "Linear Support Vector Regression",
         random_search: bool = False,
         parameters: dict[
-            str, Union[scipy.stats.rv_continuous, List[Union[int, str, float]]]
+            str, Union[scipy.stats.rv_continuous, list[Union[int, str, float]]]
         ] = {
             "C": uniform(loc=0.1, scale=1.9),
             "epsilon": uniform(loc=1e-8, scale=1),
@@ -2069,7 +2082,7 @@ class Calibrate:
                 str,\
                 Union[\
                     scipy.stats.rv_continuous,\
-                    List[Union[int, str, float]]\
+                    list[Union[int, str, float]]\
                 ]\
             ], default=Preset distributions
             The parameters used in RandomizedSearchCV
@@ -2096,7 +2109,7 @@ class Calibrate:
         name: str = "Nu-Support Vector Regression",
         random_search: bool = False,
         parameters: dict[
-            str, Union[scipy.stats.rv_continuous, List[Union[int, str, float]]]
+            str, Union[scipy.stats.rv_continuous, list[Union[int, str, float]]]
         ] = {
             "kernel": [
                 "linear",
@@ -2125,7 +2138,7 @@ class Calibrate:
                 str,\
                 Union[\
                     scipy.stats.rv_continuous,\
-                    List[Union[int, str, float]]\
+                    list[Union[int, str, float]]\
                 ]\
             ], default=Preset distributions
             The parameters used in RandomizedSearchCV
@@ -2152,7 +2165,7 @@ class Calibrate:
         name: str = "Gaussian Process Regression",
         random_search: bool = False,
         parameters: dict[
-            str, Union[scipy.stats.rv_continuous, List[Union[int, str, float]]]
+            str, Union[scipy.stats.rv_continuous, list[Union[int, str, float]]]
         ] = {
             "kernel": [
                 None,
@@ -2181,7 +2194,7 @@ class Calibrate:
                 str,\
                 Union[\
                     scipy.stats.rv_continuous,\
-                    List[Union[int, str, float]]\
+                    list[Union[int, str, float]]\
                 ]\
             ], default=Preset distributions
             The parameters used in RandomizedSearchCV
@@ -2208,7 +2221,7 @@ class Calibrate:
         name: str = "Isotonic Regression",
         random_search: bool = False,
         parameters: dict[
-            str, Union[scipy.stats.rv_continuous, List[Union[int, str, float]]]
+            str, Union[scipy.stats.rv_continuous, list[Union[int, str, float]]]
         ] = {"increasing": [True, False]},
         **kwargs,
     ):
@@ -2225,7 +2238,7 @@ class Calibrate:
                 str,\
                 Union[\
                     scipy.stats.rv_continuous,\
-                    List[Union[int, str, float]]\
+                    list[Union[int, str, float]]\
                 ]\
             ], default=Preset distributions
             The parameters used in RandomizedSearchCV
@@ -2253,7 +2266,7 @@ class Calibrate:
         name: str = "XGBoost Regression",
         random_search: bool = False,
         parameters: dict[
-            str, Union[scipy.stats.rv_continuous, List[Union[int, str, float]]]
+            str, Union[scipy.stats.rv_continuous, list[Union[int, str, float]]]
         ] = {
             "n_estimators": [5, 25, 100, 250],
             "max_bins": [1, 3, 7, 15, 31, 63, 127, 255],
@@ -2280,7 +2293,7 @@ class Calibrate:
                 str,\
                 Union[\
                     scipy.stats.rv_continuous,\
-                    List[Union[int, str, float]]\
+                    list[Union[int, str, float]]\
                 ]\
             ], default=Preset distributions
             The parameters used in RandomizedSearchCV
@@ -2307,7 +2320,7 @@ class Calibrate:
         name: str = "XGBoost Random Forest Regression",
         random_search: bool = False,
         parameters: dict[
-            str, Union[scipy.stats.rv_continuous, List[Union[int, str, float]]]
+            str, Union[scipy.stats.rv_continuous, list[Union[int, str, float]]]
         ] = {
             "n_estimators": [5, 25, 100, 250],
             "max_bin": [1, 3, 7, 15, 31, 63, 127, 255],
@@ -2334,7 +2347,7 @@ class Calibrate:
                 str,\
                 Union[\
                     scipy.stats.rv_continuous,\
-                    List[Union[int, str, float]]\
+                    list[Union[int, str, float]]\
                 ]\
             ], default=Preset distributions
             The parameters used in RandomizedSearchCV
@@ -2361,7 +2374,7 @@ class Calibrate:
         name: str = "Linear GAM",
         random_search: bool = False,
         parameters: dict[
-            str, Union[scipy.stats.rv_continuous, List[Union[int, str, float]]]
+            str, Union[scipy.stats.rv_continuous, list[Union[int, str, float]]]
         ] = {"max_iter": [100, 500, 1000], "callbacks": ["deviance", "diffs"]},
         **kwargs,
     ):
@@ -2378,7 +2391,7 @@ class Calibrate:
                 str,\
                 Union[\
                     scipy.stats.rv_continuous,\
-                    List[Union[int, str, float]]\
+                    list[Union[int, str, float]]\
                 ]\
             ], default=Preset distributions
             The parameters used in RandomizedSearchCV
@@ -2405,7 +2418,7 @@ class Calibrate:
         name: str = "Expectile GAM",
         random_search: bool = False,
         parameters: dict[
-            str, Union[scipy.stats.rv_continuous, List[Union[int, str, float]]]
+            str, Union[scipy.stats.rv_continuous, list[Union[int, str, float]]]
         ] = {
             "max_iter": [100, 500, 1000],
             "callbacks": ["deviance", "diffs"],
@@ -2426,7 +2439,7 @@ class Calibrate:
                 str,\
                 Union[\
                     scipy.stats.rv_continuous,\
-                    List[Union[int, str, float]]\
+                    list[Union[int, str, float]]\
                 ]\
             ], default=Preset distributions
             The parameters used in RandomizedSearchCV
@@ -2471,7 +2484,7 @@ class Calibrate:
         if isinstance(scaler_options, str):
             if scaler_options == "All":
                 if (
-                        bool(x_data.le(0).any(axis=None)) or 
+                        bool(x_data.le(0).any(axis=None)) or
                         bool(y_data.drop("Fold", axis=1).le(0).any(axis=None)
                     ) and "Box-Cox Transform" in scaler_list
                 ):

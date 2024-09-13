@@ -18,7 +18,6 @@ class Summary:
     ):
         """ """
         self.results = results
-        print(self.results)
         self.plots: dict[str, dict[str, matplotlib.figure.Figure]] = dict()
         self.cols: list[str] = cols
         self.style = style
