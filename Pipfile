@@ -11,7 +11,7 @@ bambi = "*"
 shap = "*"
 xgboost = "*"
 matplotlib = "*"
-calidhayte = {file = "."}
+calidhayte = {file = ".", editable = true}
 pygam = "*"
 statsmodels = "*"
 

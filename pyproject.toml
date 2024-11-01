@@ -1,7 +1,7 @@
 [project]
 name = "calidhayte"
-version = "2.0.0dev"
-requires-python = ">=3.10"
+version = "2.1.0dev"
+requires-python = ">=3.11"
 description = "Calibrate raw measurements against reference measurements using one or more variables"
 authors = [
 	{name="Idris Hayward", email="CaderIdrisGH@outlook.com"}
@@ -98,7 +98,8 @@ addopts = [
 	"--self-contained-html",
 	"--cov=calidhayte",
 	"--cov-report=html:reports/coverage/",
-	"--cov-report=term-missing"
+	"--cov-report=term-missing",
+	"--cov-fail-under=95"
 ]
 
 [tool.mypy]
@@ -119,13 +120,14 @@ no_implicit_reexport = true
 legacy_tox_ini = """
 	[tox]
 	minversion = 4.0
-	envlist = py310, py311, ruff, mypy
+	envlist = py311, py312, ruff, mypy
 	isolated_build = true
+	allowlist_externals = ruff
 
 	[gh-actions]
 	python =
-		3.9: py310
-		3.11: py311, mypy, flake8
+		3.11: py311
+		3.12: py312, mypy, flake8
 
 	[testenv]
 	setenv =
@@ -136,12 +138,12 @@ legacy_tox_ini = """
 		pytest --basetemp={envtmpdir}
 
 	[testenv:ruff]
-	basepython = python3.11
+	basepython = python3.12
 	deps = -r requirements.txt
 	commands = ruff check src tests
 
 	[testenv:mypy]
-	basepython = python3.11
+	basepython = python3.12
 	deps = -r requirements.txt
 	commands = mypy src
 """

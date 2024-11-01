@@ -9,4 +9,5 @@ build/*
 .tmp/*
 reports/
 .coverage
+.coverage*
 Pipfile.lock

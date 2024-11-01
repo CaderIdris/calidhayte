@@ -10,30 +10,27 @@ Acts as a wrapper for scikit-learn [^skl], XGBoost [^xgb] and PyMC (via Bambi)
 
 from collections.abc import Iterable
 from copy import deepcopy as dc
+import datetime as dt
 import logging
 from pathlib import Path
 import pickle
 import sys
 from typing import (
     ClassVar,
-    Type,
     Literal,
     Optional,
+    Self,
+    Type,
     TypeVar,
     TypeAlias,
     Union,
 )
 
-try:
-    from typing import Self
-except ImportError:
-    from typing_extensions import Self
-
-# import bambi as bmb
 import pandas as pd
 from pygam import GAM, LinearGAM, ExpectileGAM
 import scipy
 from scipy.stats import uniform
+from sklearn import exceptions as sklexp
 from sklearn import ensemble as en
 from sklearn import gaussian_process as gp
 from sklearn import isotonic as iso
@@ -88,23 +85,22 @@ class VIF(BaseEstimator, TransformerMixin):
         self.bound: float = bound
         self.columns_to_drop: list[str] = []
         self.features: list[str] = []
+        self.filtered_features: list[str] = []
 
     def fit(self: Self, x: pd.DataFrame, y: None = None) -> Self:
         """ """
-        for _ in range(x.shape[1] - 2):
-            x_new = x.copy(deep=True).drop(
-                columns=[self.target, *self.columns_to_drop]
-            )
+        for _ in range(x.shape[1] - 1):
+            x_new = x.copy(deep=True).drop(self.columns_to_drop, axis=1)
             vif_data = pd.Series()
             for i, col in enumerate(x_new.columns):
+                if col == self.target:
+                    continue
                 vif_data[col] = variance_inflation_factor(x_new.values, i)
             if not (vif_data > self.bound).any():
                 break
             largest = str(vif_data.idxmax())
             self.columns_to_drop.append(largest)
-        self.features = list(
-            x.copy().drop(columns=self.columns_to_drop).columns
-        )
+        self.features = list(x.columns)
         return self
 
     def transform(self: Self, x: pd.DataFrame, y: None = None) -> pd.DataFrame:
@@ -112,10 +108,20 @@ class VIF(BaseEstimator, TransformerMixin):
         return x.copy().drop(columns=self.columns_to_drop)
 
     def get_feature_names_out(
-        self: Self, input_features: list[str]
+        self: Self, input_features: Optional[list[str]] = None
     ) -> list[str]:
         """ """
         return self.features
+
+    def get_filtered_features(
+        self: Self, input_features: Optional[list[str]] = None
+    ) -> list[str]:
+        """ """
+        return [
+            feature
+            for feature in self.features
+            if feature not in self.columns_to_drop
+        ]
 
 
 class TimeColumnTransformer(BaseEstimator, TransformerMixin):
@@ -149,7 +155,10 @@ class TimeColumnTransformer(BaseEstimator, TransformerMixin):
         )
         return new_x
 
-    def get_feature_names_out(self: Self, _: list[str]) -> list[str]:
+    def get_feature_names_out(
+        self: Self,
+        _: Optional[list[str]] = None
+    ) -> list[str]:
         """"""
         if self.feature_names_in_ is None:
             err = "Transformer not fitted"
@@ -176,14 +185,16 @@ class PolynomialPandas(BaseEstimator, TransformerMixin):
         degree: int,
         selected_features: Optional[list[str]] = None
     ) -> None:
-        self.degree = degree
-        self.estimator = pre.PolynomialFeatures(
+        self.degree: int = degree
+        self.estimator: pre.PolynomialFeatures = pre.PolynomialFeatures(
             degree=degree, include_bias=False
         )
-        self.selected_features = selected_features
+        self.selected_features: Optional[list[str]] = selected_features
+        self.prefit_columns: list[str] = []
 
     def fit(self: Self, x: pd.DataFrame, y: None = None) -> Optional[Self]:
         """ """
+        self.prefit_columns = list(x.columns)
         if self.selected_features is None:
             self.estimator.fit(x)
         else:
@@ -194,10 +205,7 @@ class PolynomialPandas(BaseEstimator, TransformerMixin):
             ]
             if selected_features:
                 self.estimator.fit(x.loc[:, selected_features])
-            else:
-                return None
         return self
-
 
     def transform(self: Self, x: pd.DataFrame, y: None = None) -> pd.DataFrame:
         """ """
@@ -218,16 +226,25 @@ class PolynomialPandas(BaseEstimator, TransformerMixin):
                 transformed_array = pd.DataFrame(
                         self.estimator.transform(x.loc[:, selected_features]),
                         index=x.index,
-                        columns=pd.Index(selected_features)
+                        columns=self.estimator.get_feature_names_out()
                 )
                 x.loc[:, transformed_array.columns] = transformed_array
         return x
 
     def get_feature_names_out(
-        self: Self, input_features: list[str]
+        self: Self, input_features: Optional[list[str]] = None
     ) -> list[str]:
         """ """
-        return list(self.estimator.get_feature_names_out())
+        try:
+            est_cols = list(self.estimator.get_feature_names_out())
+            feature_list = [
+                col
+                for col in self.prefit_columns
+                if col not in est_cols
+            ]
+            return feature_list + est_cols
+        except sklexp.NotFittedError:
+            return list(self.prefit_columns)
 
 
 class Calibrate:
@@ -344,7 +361,7 @@ class Calibrate:
         pickle_path: Optional[Path] = None,
         subsample_data: Optional[Union[int, float]] = None,
         folds: int = 5,
-        validation_size: float = 0.1,
+        validation_split: dt.datetime | float = 0.1,
         strat_groups: int = 10,
         seed: int = 62,
         random_search_iterations: int = 25,
@@ -408,15 +425,6 @@ class Calibrate:
         if target not in x_data.columns or target not in y_data.columns:
             error_string = f"{target} does not exist in both columns."
             raise ValueError(error_string)
-        if subsample_data is not None:
-            try:
-                x_data = cls.subsample_df(
-                    x_data,
-                    target,
-                    subsample_data
-                )
-            except ValueError:
-                logger.warning('Subset size larger than dataset size')
         join_index = (
             x_data.join(y_data, how="inner", lsuffix="x", rsuffix="y")
             .dropna()
@@ -428,9 +436,19 @@ class Calibrate:
             target,
             folds,
             strat_groups,
-            validation_size,
+            validation_split,
             seed,
         )
+        if subsample_data is not None:
+            try:
+                y_data_filtered = cls.subsample_df(
+                    y_data_filtered,
+                    subsample_data
+                )
+                x_data_filtered = x_data_filtered.loc[y_data_filtered.index, :]
+            except ValueError as err:
+                logger.warning(str(err))
+                logger.warning('Subset size larger than dataset size')
         scaler_list = cls.configure_scalers(
             scaler, x_data=x_data_filtered, y_data=y_data_filtered
         )
@@ -623,14 +641,13 @@ class Calibrate:
                                 [fold, "Validation"]
                             )
                         ]
-                        if self.interaction_degree > 1:
-                            interaction_vars = PolynomialPandas(
-                                degree=self.interaction_degree,
-                                selected_features=self.interaction_features
-
-                            ).set_output(transform="pandas")
-                        else:
-                            interaction_vars = None
+                        interaction_vars = (
+                                None if self.interaction_degree <= 1
+                                else PolynomialPandas(
+                                    degree=self.interaction_degree,
+                                    selected_features=self.interaction_features
+                                )
+                        )
 
                         vif = (
                             VIF(target=self.target, bound=self.vif_bound)
@@ -650,28 +667,39 @@ class Calibrate:
                             )
                         )
 
+                        pipeline_components = [
+                            (
+                                "Selector",
+                                ColumnTransformer(
+                                    [("selector", "passthrough", vals)],
+                                    remainder="drop",
+                                    verbose_feature_names_out=False,
+                                ).set_output(transform="pandas"),
+                            ),
+                            ("Interaction Variables", interaction_vars),
+                            ("VIF", vif),
+                            ("Scaler", scaler_transformer),
+                            ("Time Column", time_column),
+                        ]
                         pipeline = Pipeline(
                             [
-                                (
-                                    "Selector",
-                                    ColumnTransformer(
-                                        [("selector", "passthrough", vals)],
-                                        remainder="drop",
-                                        verbose_feature_names_out=False,
-                                    ).set_output(transform="pandas"),
-                                ),
-                                ("Interaction Variables", interaction_vars),
-                                ("VIF", vif),
-                                ("Scaler", scaler_transformer),
-                                ("Time Column", time_column),
+                                p for p in pipeline_components
+                                if p[1] is not None
                             ]
+                        )
+                        logger.debug(
+                            "%s %s %s %s",
+                            str(fold),
+                            str(add_time_column),
+                            str(sec_vals),
+                            str(scaler)
                         )
                         pipeline.fit(
                             self.x_data.loc[y_data.index, :],
-                            y_data.loc[:, self.target],
+                            y_data.loc[:, self.target]
                         )
                         vals_str = " + ".join(
-                            list(pipeline.get_feature_names_out())
+                            list(pipeline[-1].get_feature_names_out())
                         )
                         if vals_str not in self.transformer_pipelines[scaler]:
                             self.transformer_pipelines[scaler][vals_str] = {}
@@ -790,6 +818,7 @@ class Calibrate:
                 verbose=self.verbosity,
                 n_jobs=self.n_jobs,
                 cv=self.folds,
+                random_state=self.seed
             )
         else:
             classifier = lm.LinearRegression(**kwargs)
@@ -846,6 +875,7 @@ class Calibrate:
                 verbose=self.verbosity,
                 n_jobs=self.n_jobs,
                 cv=self.folds,
+                random_state=self.seed
             )
         else:
             classifier = lm.Ridge(**kwargs)
@@ -917,6 +947,7 @@ class Calibrate:
                 verbose=self.verbosity,
                 n_jobs=self.n_jobs,
                 cv=self.folds,
+                random_state=self.seed
             )
         else:
             classifier = lm.Lasso(**kwargs)
@@ -989,6 +1020,7 @@ class Calibrate:
                 verbose=self.verbosity,
                 n_jobs=self.n_jobs,
                 cv=self.folds,
+                random_state=self.seed
             )
         else:
             classifier = lm.ElasticNet(**kwargs)
@@ -1055,6 +1087,7 @@ class Calibrate:
                 verbose=self.verbosity,
                 n_jobs=self.n_jobs,
                 cv=self.folds,
+                random_state=self.seed
             )
         else:
             classifier = lm.Lars(**kwargs)
@@ -1099,6 +1132,7 @@ class Calibrate:
                 verbose=self.verbosity,
                 n_jobs=self.n_jobs,
                 cv=self.folds,
+                random_state=self.seed
             )
         else:
             classifier = lm.LassoLars(**kwargs)
@@ -1114,7 +1148,7 @@ class Calibrate:
         random_search: bool = False,
         parameters: dict[
             str, Union[scipy.stats.rv_continuous, list[Union[int, str, float]]]
-        ] = {"n_nonzero_coefs": list(range(1, 11))},
+        ] = {"tol": uniform(loc=0, scale=5)},
         **kwargs,
     ):
         """
@@ -1143,6 +1177,7 @@ class Calibrate:
                 verbose=self.verbosity,
                 n_jobs=self.n_jobs,
                 cv=self.folds,
+                random_state=self.seed
             )
         else:
             classifier = lm.OrthogonalMatchingPursuit(**kwargs)
@@ -1194,6 +1229,7 @@ class Calibrate:
                 verbose=self.verbosity,
                 n_jobs=self.n_jobs,
                 cv=self.folds,
+                random_state=self.seed
             )
         else:
             classifier = lm.BayesianRidge(**kwargs)
@@ -1244,6 +1280,7 @@ class Calibrate:
                 verbose=self.verbosity,
                 n_jobs=self.n_jobs,
                 cv=self.folds,
+                random_state=self.seed
             )
         else:
             classifier = lm.ARDRegression(**kwargs)
@@ -1293,6 +1330,7 @@ class Calibrate:
                 verbose=self.verbosity,
                 n_jobs=self.n_jobs,
                 cv=self.folds,
+                random_state=self.seed
             )
         else:
             classifier = lm.TweedieRegressor(**kwargs)
@@ -1352,6 +1390,7 @@ class Calibrate:
                 verbose=self.verbosity,
                 n_jobs=self.n_jobs,
                 cv=self.folds,
+                random_state=self.seed
             )
         else:
             classifier = lm.SGDRegressor(**kwargs)
@@ -1401,6 +1440,7 @@ class Calibrate:
                 verbose=self.verbosity,
                 n_jobs=self.n_jobs,
                 cv=self.folds,
+                random_state=self.seed
             )
         else:
             classifier = lm.PassiveAggressiveRegressor(**kwargs)
@@ -1422,7 +1462,7 @@ class Calibrate:
                 lm.TheilSenRegressor(),
                 lm.LassoLarsCV(),
             ],
-            "min_samples": [1e-4, 1e-3, 1e-2],
+            "min_samples": [1e-3, 1e-2, 1e-1, 1],
         },
         **kwargs,
     ):
@@ -1452,6 +1492,7 @@ class Calibrate:
                 verbose=self.verbosity,
                 n_jobs=self.n_jobs,
                 cv=self.folds,
+                random_state=self.seed
             )
         else:
             classifier = lm.RANSACRegressor(**kwargs)
@@ -1496,6 +1537,7 @@ class Calibrate:
                 verbose=self.verbosity,
                 n_jobs=self.n_jobs,
                 cv=self.folds,
+                random_state=self.seed
             )
         else:
             classifier = lm.TheilSenRegressor(**kwargs)
@@ -1544,6 +1586,7 @@ class Calibrate:
                 verbose=self.verbosity,
                 n_jobs=self.n_jobs,
                 cv=self.folds,
+                random_state=self.seed
             )
         else:
             classifier = lm.HuberRegressor(**kwargs)
@@ -1598,6 +1641,7 @@ class Calibrate:
                 verbose=self.verbosity,
                 n_jobs=self.n_jobs,
                 cv=self.folds,
+                random_state=self.seed
             )
         else:
             classifier = lm.QuantileRegressor(solver="highs", **kwargs)
@@ -1652,6 +1696,7 @@ class Calibrate:
                 verbose=self.verbosity,
                 n_jobs=self.n_jobs,
                 cv=self.folds,
+                random_state=self.seed
             )
         else:
             classifier = tree.DecisionTreeRegressor(**kwargs)
@@ -1706,6 +1751,7 @@ class Calibrate:
                 verbose=self.verbosity,
                 n_jobs=self.n_jobs,
                 cv=self.folds,
+                random_state=self.seed
             )
         else:
             classifier = tree.ExtraTreeRegressor(**kwargs)
@@ -1761,6 +1807,7 @@ class Calibrate:
                 verbose=self.verbosity,
                 n_jobs=self.n_jobs,
                 cv=self.folds,
+                random_state=self.seed
             )
         else:
             classifier = en.RandomForestRegressor(bootstrap=True, **kwargs)
@@ -1816,6 +1863,7 @@ class Calibrate:
                 verbose=self.verbosity,
                 n_jobs=self.n_jobs,
                 cv=self.folds,
+                random_state=self.seed
             )
         else:
             classifier = en.ExtraTreesRegressor(bootstrap=True, **kwargs)
@@ -1838,7 +1886,7 @@ class Calibrate:
             "subsample": uniform(loc=0.01, scale=0.99),
             "criterion": ["friedman_mse", "squared_error"],
             "max_features": [None, "sqrt", "log2"],
-            "init": [None, "zero", lm.LinearRegression, lm.TheilSenRegressor],
+            #"init": [None, "zero", lm.LinearRegression, lm.TheilSenRegressor],
             "ccp_alpha": uniform(loc=0, scale=2),
         },
         **kwargs,
@@ -1869,6 +1917,7 @@ class Calibrate:
                 verbose=self.verbosity,
                 n_jobs=self.n_jobs,
                 cv=self.folds,
+                random_state=self.seed
             )
         else:
             classifier = en.GradientBoostingRegressor(**kwargs)
@@ -1926,6 +1975,7 @@ class Calibrate:
                 verbose=self.verbosity,
                 n_jobs=self.n_jobs,
                 cv=self.folds,
+                random_state=self.seed
             )
         else:
             classifier = en.HistGradientBoostingRegressor(**kwargs)
@@ -1990,6 +2040,7 @@ class Calibrate:
                 verbose=self.verbosity,
                 n_jobs=self.n_jobs,
                 cv=self.folds,
+                random_state=self.seed
             )
         else:
             classifier = nn.MLPRegressor(**kwargs)
@@ -2047,6 +2098,7 @@ class Calibrate:
                 verbose=self.verbosity,
                 n_jobs=self.n_jobs,
                 cv=self.folds,
+                random_state=self.seed
             )
         else:
             classifier = svm.SVR(**kwargs)
@@ -2095,6 +2147,7 @@ class Calibrate:
                 verbose=self.verbosity,
                 n_jobs=self.n_jobs,
                 cv=self.folds,
+                random_state=self.seed
             )
         else:
             classifier = svm.LinearSVR(**kwargs)
@@ -2151,6 +2204,7 @@ class Calibrate:
                 verbose=self.verbosity,
                 n_jobs=self.n_jobs,
                 cv=self.folds,
+                random_state=self.seed
             )
         else:
             classifier = svm.NuSVR(**kwargs)
@@ -2169,12 +2223,11 @@ class Calibrate:
         ] = {
             "kernel": [
                 None,
-                kern.RBF,
-                kern.Matern,
-                kern.DotProduct,
-                kern.WhiteKernel,
-                kern.CompoundKernel,
-                kern.ExpSineSquared,
+                kern.RBF(),
+                kern.Matern(),
+                kern.DotProduct(),
+                kern.WhiteKernel(),
+                kern.ExpSineSquared(),
             ],
             "alpha": uniform(loc=0, scale=1e-8),
             "normalize_y": [True, False],
@@ -2207,6 +2260,7 @@ class Calibrate:
                 verbose=self.verbosity,
                 n_jobs=self.n_jobs,
                 cv=self.folds,
+                random_state=self.seed
             )
         else:
             classifier = gp.GaussianProcessRegressor(**kwargs)
@@ -2251,6 +2305,7 @@ class Calibrate:
                 verbose=self.verbosity,
                 n_jobs=self.n_jobs,
                 cv=self.folds,
+                random_state=self.seed
             )
         else:
             classifier = iso.IsotonicRegression(**kwargs)
@@ -2269,7 +2324,7 @@ class Calibrate:
             str, Union[scipy.stats.rv_continuous, list[Union[int, str, float]]]
         ] = {
             "n_estimators": [5, 25, 100, 250],
-            "max_bins": [1, 3, 7, 15, 31, 63, 127, 255],
+            "max_bins": [2, 3, 7, 15, 31, 63, 127, 255],
             "grow_policy": ["depthwise", "lossguide"],
             "learning_rate": uniform(loc=0, scale=2),
             "tree_method": ["exact", "approx", "hist"],
@@ -2306,6 +2361,7 @@ class Calibrate:
                 verbose=self.verbosity,
                 n_jobs=self.n_jobs,
                 cv=self.folds,
+                random_state=self.seed
             )
         else:
             classifier = xgb.XGBRegressor(**kwargs)
@@ -2360,6 +2416,7 @@ class Calibrate:
                 verbose=self.verbosity,
                 n_jobs=self.n_jobs,
                 cv=self.folds,
+                random_state=self.seed
             )
         else:
             classifier = xgb.XGBRFRegressor(**kwargs)
@@ -2404,6 +2461,7 @@ class Calibrate:
                 verbose=self.verbosity,
                 n_jobs=self.n_jobs,
                 cv=self.folds,
+                random_state=self.seed
             )
         else:
             classifier = LinearGAM(**kwargs)
@@ -2452,6 +2510,7 @@ class Calibrate:
                 verbose=self.verbosity,
                 n_jobs=self.n_jobs,
                 cv=self.folds,
+                random_state=self.seed
             )
         else:
             classifier = ExpectileGAM(**kwargs)
@@ -2503,10 +2562,10 @@ class Calibrate:
                 )
         elif isinstance(scaler_options, (tuple, list)):
             for sc in scaler_options:
-                if sc == "Box-Cox Transform" and not any(
+                if sc == "Box-Cox Transform" and (
                     (
-                        bool(x_data.lt(0).any(axis=None)),
-                        bool(y_data.lt(0).any(axis=None)),
+                        bool(x_data.le(0).any(axis=None)) or
+                        bool(y_data.drop("Fold", axis=1).le(0).any(axis=None)),
                     )
                 ):
                     logger.warning(
@@ -2530,19 +2589,15 @@ class Calibrate:
     @staticmethod
     def subsample_df(
         df: pd.DataFrame,
-        target_var: str,
         subsample_size: Union[float, int] = 1.0,
         strat_groups: int = 25,
         seed: int = 62,
     ) -> pd.DataFrame:
         """Create stratified k-folds on continuous variable.
         """
-        _df = df.copy().dropna(subset=target_var)
-        _df["Group"] = pd.qcut(
-            _df.loc[:, target_var], strat_groups, labels=False
-        )
+        _df = df.copy()
 
-        group_label = _df.loc[:, "Group"]
+        group_label = pd.Categorical(_df.loc[:, "Fold"]).codes
 
         _, subset = train_test_split(
             _df,
@@ -2553,17 +2608,17 @@ class Calibrate:
         )
 
         return (
-            subset.drop("Group", axis=1)
+            subset
         )
 
     @staticmethod
     def cont_strat_folds(
         df: pd.DataFrame,
-        target_var: str,
-        splits: int = 5,
-        strat_groups: int = 5,
-        validation_size: float = 0.1,
-        seed: int = 62,
+        target_var,
+        splits: int,
+        strat_groups: int,
+        validation_split: float | dt.datetime | dt.timedelta,
+        seed: int
     ) -> pd.DataFrame:
         """Create stratified k-folds on continuous variable.
 
@@ -2577,8 +2632,9 @@ class Calibrate:
             Number of folds to make.
         strat_groups : int, default=10
             Number of groups to split data in to for stratification.
-        validation_size : float, default = 0.1
-            Size of measurements to keep aside for validation
+        validation_split : float or dt.datetime, default = 0.1
+            Size of measurements to keep aside for validation, or timestamp
+            where all measurements after are used for validation
         seed : int, default=62
             Random state to use.
 
@@ -2624,14 +2680,25 @@ class Calibrate:
         )
 
         group_label = _df.loc[:, "Group"]
+        if isinstance(validation_split, float):
+            train_set, val_set = train_test_split(
+                _df,
+                test_size=validation_split,
+                random_state=seed,
+                shuffle=False
+            )
+        elif isinstance(validation_split, dt.datetime):
+            train_set = _df[_df.index < validation_split]
+            val_set = _df[_df.index >= validation_split]
+        elif isinstance(validation_split, dt.timedelta):
+            split_time = _df.index.min() + validation_split
+            train_set = _df[_df.index < split_time]
+            val_set = _df[_df.index >= split_time]
+        else:
+            raise TypeError(
+                "Expected float, datetime or timedelta for validation split"
+            )
 
-        train_set, val_set = train_test_split(
-            _df,
-            test_size=validation_size,
-            random_state=seed,
-            shuffle=True,
-            stratify=group_label,
-        )
 
         group_label = train_set.loc[:, "Group"]
 
@@ -2668,7 +2735,7 @@ class Calibrate:
         str,  # Technique
         dict[
             str,  # Scaling method
-            dict[str, dict[int, Pipeline]],  # Variables used  # Fold
+            dict[str, dict[int, Pipeline | Path]],  # Variables used  # Fold
         ],
     ]:
         """

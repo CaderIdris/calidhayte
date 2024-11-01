@@ -10,7 +10,7 @@ Acts as a wrapper for scikit-learn performance metrics [^skl].
 import logging
 from pathlib import Path
 import pickle
-from typing import Any, TypeAlias, Union
+from typing import Any, Optional, TypeAlias, Union
 
 import numpy as np
 import pandas as pd
@@ -32,7 +32,7 @@ logger = logging.getLogger(f"__main__.{__name__}")
 
 
 def crmse(
-    true: pd.Series, predicted: pd.Series, squared: bool = True, **kwargs
+    true: pd.Series, predicted: pd.Series, squared: bool = False, **kwargs
 ):
     """
     Calculate the centered root mean squared error between pred and true
@@ -42,7 +42,7 @@ def crmse(
     centred_pred = predicted.sub(predicted.mean())
     centred_true = true.sub(true.mean())
     cmse = centred_pred.sub(centred_true).pow(2.0).mean()
-    if not squared:
+    if squared:
         return cmse
     else:
         return np.sqrt(cmse)
@@ -84,6 +84,12 @@ def ref_sd(true: pd.Series, _: pd.Series, **kwargs):
     """
     return true.std()
 
+def ref_mad(true: pd.Series, _: pd.Series, **kwargs):
+    """
+    Calculates standard deviation of reference measurements, useful for
+    normalising errors
+    """
+    return true.sub(true.mean()).abs().mean()
 
 def ref_range(true: pd.Series, _: pd.Series, **kwargs):
     """
@@ -115,7 +121,7 @@ class Results:
         y_data: pd.DataFrame,
         target: str,
         models: CoefficientPipelineDict,
-        errors: pd.DataFrame = pd.DataFrame(),
+        errors: Optional[pd.DataFrame] = None,
     ):
         """
         Initialises the class
@@ -186,7 +192,10 @@ class Results:
         ```
 
         """
-        self.errors: pd.DataFrame = errors
+        if errors is not None:
+            self.errors: pd.DataFrame = errors
+        else:
+            self.errors = pd.DataFrame()
         """
         Results of error metric valculations. Index increases sequentially
         by 1, columns contain the technique, scaling method, variables and
@@ -227,7 +236,10 @@ class Results:
             true = self.y.loc[:, self.target][
                 self.y.loc[:, "Fold"] == "Validation"
             ]
-            pred_raw = self.x.loc[true.index, self.target]
+            pred_raw = self.x.loc[
+                true.index,
+                self.target
+            ]
             predicted = pred_raw.dropna()
             error = err(true[predicted.index], predicted, **kwargs)
             if idx not in self.errors.index:
@@ -276,7 +288,7 @@ class Results:
                             ][vars].columns
                         ):
                             pred_raw = self.x.loc[
-                                true.index, vars.split(" + ")
+                            true.index, :
                             ]
                             if isinstance(pipe, Pipeline):
                                 pipe_to_use = pipe
@@ -297,11 +309,13 @@ class Results:
                                 true[predicted.index], predicted, **kwargs
                             )
                         except ValueError as exc:
+
                             logger.warning(
+                                "%s, %s, %s, %s",
                                 technique, scaling_technique, vars, fold
                             )
                             for arg in exc.args:
-                                logger.warning(arg)
+                                logger.warning(str(arg))
                             error = np.nan
                             predicted = pd.Series()
 
@@ -380,12 +394,12 @@ sklearn.metrics.mean_absolute_error\
         and predicted y (x) [^tech].
 
         [^tech]: [Link](\
-        https://scikit-learn.org/stable/modules/generated/\
+        https://scikit-learn.org/stable/modules/generated/\any
 sklearn.metrics.mean_squared_error\
         )
         """
         self._sklearn_error_meta(
-            met.mean_squared_error, "Root Mean Squared Error", squared=False
+            met.root_mean_squared_error, "Root Mean Squared Error"
         )
 
     def root_mean_squared_log(self):
@@ -398,9 +412,8 @@ sklearn.metrics.mean_squared_log_error\
         )
         """
         self._sklearn_error_meta(
-            met.mean_squared_log_error,
-            "Root Mean Squared Log Error",
-            squared=False,
+            met.root_mean_squared_log_error,
+            "Root Mean Squared Log Error"
         )
 
     def median_absolute(self):
@@ -493,14 +506,18 @@ sklearn.metrics.mean_tweedie_deviance\
             met.mean_pinball_loss, "Mean Pinball Deviance"
         )
 
-    def centered_rmse(self):
+    def centered_rmse(self, **kwargs):
         """
         Calculate the centered root mean squared error between pred and true
 
         $\\sqrt{\\frac{1}{N}\\sum_{n=1}^{N}[(p_n-\\bar{p}) - \
 (t_n-\\bar{t})]^2}$
         """
-        self._sklearn_error_meta(crmse, "Centered Root Mean Squared Error")
+        self._sklearn_error_meta(
+            crmse,
+            "Centered Root Mean Squared Error",
+            **kwargs
+        )
 
     def unbiased_rmse(self):
         """
@@ -546,6 +563,13 @@ sum_{n=1}^{N}[p_n - t_n])^2}$
         normalising errors
         """
         self._sklearn_error_meta(ref_sd, "Reference Standard Deviation")
+
+    def ref_mad(self):
+        """
+        Calculates standard deviation of reference measurements, useful for
+        normalising errors
+        """
+        self._sklearn_error_meta(ref_mad, "Reference Absolute Deviation")
 
     def return_errors(self) -> pd.DataFrame:
         """
